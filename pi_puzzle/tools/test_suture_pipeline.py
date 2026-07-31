@@ -77,8 +77,33 @@ def build_homography(v, frame):
     """用给定 vision 实例从合成图重建像素->世界单应 (模拟离线无标定单应路径)"""
     quad = v.auto_detect_paper(frame)
     assert quad is not None, "A4 纸检测失败"
-    v.set_paper_homography(quad)
+    _backup_homography()
+    try:
+        v.set_paper_homography(quad)  # 内部会 np.save 到 homography.npy
+    finally:
+        _restore_homography()
     return v.homography, quad
+
+
+_HOMOGRAPHY_BACKUP = None
+
+
+def _backup_homography():
+    """备份真实标定单应: set_paper_homography 会把合成单应写盘覆盖真实标定"""
+    global _HOMOGRAPHY_BACKUP
+    path = os.path.join(ROOT, "homography.npy")
+    if os.path.exists(path):
+        _HOMOGRAPHY_BACKUP = np.load(path)
+
+
+def _restore_homography():
+    global _HOMOGRAPHY_BACKUP
+    path = os.path.join(ROOT, "homography.npy")
+    if _HOMOGRAPHY_BACKUP is not None:
+        np.save(path, _HOMOGRAPHY_BACKUP)
+    elif os.path.exists(path):
+        os.remove(path)  # 原本不存在则删除污染产物
+    _HOMOGRAPHY_BACKUP = None
 
 
 def check_tasks(tasks, label, expect_rect, allow_approximate=True):
