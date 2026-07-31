@@ -1,4 +1,4 @@
-"""123 项目视觉检测核心（Pi ~/puzzle/vision.py 快照 2026-07-31）。
+"""123 项目视觉检测核心（pi_puzzle/vision.py 快照 2026-08-01 05:25，含黑底修复）。
 
 移植到 workspace 时改动：
 - 移除 camera_backend 依赖（外部传入帧）
@@ -89,13 +89,13 @@ class PuzzleVision:
                     (0, 255, 0),
                     2,
                 )
-                pass  # cv2.imshow("Calibration", frame)
+                cv2.imshow("Calibration", frame)
 
-        pass  # cv2.imshow("Calibration", frame)
-        pass  # cv2.setMouseCallback("Calibration", mouse_callback)
+        cv2.imshow("Calibration", frame)
+        cv2.setMouseCallback("Calibration", mouse_callback)
 
         while len(points) < 4:
-            if 0xFF == ord("q"):
+            if cv2.waitKey(1) & 0xFF == ord("q"):
                 cv2.destroyWindow("Calibration")
                 return False
 
@@ -310,7 +310,14 @@ class PuzzleVision:
 
     # ==================== 任意形状碎片检测 (当前阶段) ====================
 
-    def detect_pieces_arbitrary(self, frame=None, quad=None, flat_th=0.82):
+    def detect_pieces_arbitrary(
+        self,
+        frame=None,
+        quad=None,
+        flat_th=0.82,
+        smooth_mask=True,
+        refine_edges=True,
+    ):
         """
         检测纸上的有色碎片, 输出mm坐标的多边形 (CCW)。
         需要先设置 self.homography (set_paper_homography)。
@@ -319,6 +326,8 @@ class PuzzleVision:
         白纸在此相机下饱和度可达60-70, 固定阈值会把纸面阴影误判为碎片。
         白色碎片与纸同色, 本方法不适用 (后续用边缘法单独处理)。
         flat_th: 暗光平场阈值, 调用方可扫描多值取可解的一组
+        smooth_mask: 是否对掩码做高斯平滑；黑底UVC扑克牌碎片可关闭以保留尖角
+        refine_edges: 是否用直线拟合精化边缘；检测轮廓较干净时可关闭
 
         返回: list of dict:
             id, vertices(mm,CCW), edge_lengths(mm), centroid(mm),
@@ -381,8 +390,10 @@ class PuzzleVision:
             pm, cv2.MORPH_CLOSE, np.ones((close_k, close_k), np.uint8)
         )
         # 平滑掩码边缘 (暗光FPN噪声使轮廓阶梯化, 后续多边形近似会失真)
-        pm = cv2.GaussianBlur(pm, (9, 9), 0)
-        _, pm = cv2.threshold(pm, 127, 255, cv2.THRESH_BINARY)
+        # 对黑底UVC实拍可选择关闭，避免扑克牌碎片的尖角和短边被圆滑掉。
+        if smooth_mask:
+            pm = cv2.GaussianBlur(pm, (9, 9), 0)
+            _, pm = cv2.threshold(pm, 127, 255, cv2.THRESH_BINARY)
 
         contours, _ = cv2.findContours(pm, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
         pieces = []
@@ -425,15 +436,25 @@ class PuzzleVision:
             # 边缘直线精化: 对每条边收集附近轮廓点拟合直线,
             # 相邻直线求交得顶点 — 比approxPolyDP顶点抗噪得多
             cnt_pts = cnt_mm.reshape(-1, 2)
-            refined = self._refine_edges(cnt_pts, verts)
-            if refined is not None:
-                verts = refined
+            if refine_edges:
+                refined = self._refine_edges(cnt_pts, verts)
+                if refined is not None:
+                    verts = refined
             # 保证CCW
             if cv2.contourArea(verts.astype(np.float32), oriented=True) < 0:
                 verts = verts[::-1].copy()
 
             area_mm2 = abs(cv2.contourArea(verts.astype(np.float32)))
-            if area_mm2 < 100:
+            # 黑底扑克牌/白色任务碎片由一整张卡裁成4片，真实单片面积通常
+            # 远大于纸边伪轮廓；200mm²以下按边框撕裂/噪点处理。
+            # 实测：扑克牌不规则切分最小片可低至 263mm²，门槛放宽到 200。
+            min_area_mm2 = 200.0 if black_background else 100.0
+            if area_mm2 < min_area_mm2:
+                continue
+            # 上限：单片不可能超过目标矩形面积（题面最大 12×9cm = 10800mm²）。
+            # 实测：相邻标定板/垃箱等亮色大物体会形成 18000mm²+ 巨轮廓，
+            # 不过滤会占掉 max_pieces 名额并污染求解。
+            if area_mm2 > 5000.0:
                 continue
             edges = [
                 float(np.linalg.norm(verts[(i + 1) % len(verts)] - verts[i]))
@@ -679,8 +700,8 @@ class PuzzleVision:
                 )
 
         if SHOW_IMAGE:
-            pass  # cv2.imshow("Detection", frame)
-            pass  # cv2.imshow("Mask", mask)
+            cv2.imshow("Detection", frame)
+            cv2.imshow("Mask", mask)
 
         return pieces
 
@@ -784,7 +805,7 @@ class PuzzleVision:
                 )
 
         if SHOW_IMAGE:
-            pass  # cv2.imshow("Edge Detection", frame)
+            cv2.imshow("Edge Detection", frame)
 
         return pieces
 
@@ -862,9 +883,8 @@ class PuzzleVision:
                     if length > max_len:
                         max_len = length
                         mid_y = (y1 + y2) / 2
-                        mid_x = (x1 + x2) / 2
                         world = self.pixel_to_world(
-                            np.array([[mid_x, mid_y]])
+                            np.array([[CAMERA_WIDTH / 2, mid_y]])
                         )
                         if world is not None:
                             best_y = world[0][1]
@@ -875,3 +895,51 @@ class PuzzleVision:
         return DIVIDER_LINE_Y
 
 
+if __name__ == "__main__":
+    # 视觉模块测试
+    vision = PuzzleVision()
+
+    # 尝试加载已有标定
+    if not vision.load_calibration():
+        print("请先进行标定...")
+        if not vision.start_interactive_calibration():
+            print("标定失败, 退出")
+            vision.release()
+            exit()
+
+    print("\n=== 碎片检测测试 ===")
+    print("按 'q' 退出, 'c' 切换检测模式, 'd' 显示深度图")
+
+    mode = "color"  # 'color' or 'edge'
+    show_depth = False
+    while True:
+        frame = vision.capture_frame()
+        if frame is None:
+            break
+
+        if mode == "color":
+            pieces = vision.detect_colored_pieces(frame)
+        else:
+            pieces = vision.detect_pieces_by_edge(frame)
+
+        print(f"\r检测到 {len(pieces)} 个碎片", end="")
+
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord("q"):
+            break
+        elif key == ord("c"):
+            mode = "edge" if mode == "color" else "color"
+            print(f"\n切换到 {mode} 模式")
+        elif key == ord("d"):
+            show_depth = not show_depth
+            print(f"\n深度图显示: {show_depth}")
+
+        if show_depth:
+            depth = vision.capture_depth()
+            if depth is not None:
+                depth_vis = cv2.applyColorMap(
+                    cv2.convertScaleAbs(depth, alpha=255 / 1000), cv2.COLORMAP_JET
+                )
+                cv2.imshow("Depth", depth_vis)
+
+    vision.release()

@@ -8,9 +8,12 @@
 """
 
 # ===================== A4 纸面几何 =====================
-A4_WIDTH = 297.0  # A4 横放宽度 mm
-A4_HEIGHT = 210.0  # A4 横放高度 mm
-DIVIDER_LINE_Y = 105.0  # 分界线 y (纸面中线) mm
+# 与 Pi 上 /home/epuzzle/puzzle/config.py 一致：A4 竖放，
+# 世界坐标原点 = 纸张左下角，x 向右 0--210（短边），y 向上 0--297（长边）。
+# 写反会使 quad_from_homography 返回旋转 90° 的纸面框，把碎片切到 ROI 外。
+A4_WIDTH = 210.0  # 水平方向 mm
+A4_HEIGHT = 297.0  # 垂直方向 mm
+DIVIDER_LINE_Y = 148.5  # 上下区域分界线（A4 高度的一半）mm
 
 # ===================== 碎片几何约束 =====================
 MIN_EDGE_LEN_MM = 8.0  # 小于此长度的边视为噪声并合并（题面最小边 20mm）
@@ -41,3 +44,4 @@ PIECE_COLOR_HSV = {
 
 # 交互标定/预览窗口开关；库内调用一律关闭。
 SHOW_IMAGE = False
+CAMERA_TYPE = 'none'
