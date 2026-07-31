@@ -1,0 +1,317 @@
+{
+  "stand": "camera_stand v1",
+  "units": "mm / g / N",
+  "coordinate_frame": "stand（桌面 Z=0，底座圆心 XY 原点，+X 指向 A4）",
+  "masses_estimated": {
+    "printed_g": {
+      "p1_base_tub": 71.0,
+      "p2_base_top": 56.0,
+      "p3_yaw_rotor": 21.0,
+      "p4_boom": 42.0,
+      "p5_tip_elbow": 23.0,
+      "p6_clamp_band": 3.0,
+      "p7_a4_jig": 5.0,
+      "p8_cable_clip": 1.0,
+      "p9a_fit_coupon": 14.0,
+      "p9b_fit_plug": 3.0
+    },
+    "cavity_volume_cm3": 530.0,
+    "fill_sand_g": 795.0,
+    "fill_steel_grit_g": 2386.0,
+    "boardcam_g_assumed": 150.0,
+    "camera_g_UNKNOWN": 120.0
+  },
+  "checks": {
+    "parts": [
+      {
+        "part": "p1_base_tub",
+        "valid": true,
+        "volume_cm3": 164.5,
+        "bbox_mm": [
+          167.2,
+          167.2,
+          32.0
+        ],
+        "fits_bed_flat": true,
+        "fits_bed_diagonal": true,
+        "est_print_mass_g": 71.0,
+        "claim": "hard",
+        "pass": true
+      },
+      {
+        "part": "p2_base_top",
+        "valid": true,
+        "volume_cm3": 100.9,
+        "bbox_mm": [
+          166.2,
+          166.2,
+          28.0
+        ],
+        "fits_bed_flat": true,
+        "fits_bed_diagonal": true,
+        "est_print_mass_g": 56.0,
+        "claim": "hard",
+        "pass": true
+      },
+      {
+        "part": "p3_yaw_rotor",
+        "valid": true,
+        "volume_cm3": 33.9,
+        "bbox_mm": [
+          60.0,
+          60.0,
+          22.0
+        ],
+        "fits_bed_flat": true,
+        "fits_bed_diagonal": true,
+        "est_print_mass_g": 21.0,
+        "claim": "hard",
+        "pass": true
+      },
+      {
+        "part": "p4_boom",
+        "valid": true,
+        "volume_cm3": 48.8,
+        "bbox_mm": [
+          257.8,
+          34.0,
+          164.3
+        ],
+        "fits_bed_flat": false,
+        "fits_bed_diagonal": true,
+        "est_print_mass_g": 42.0,
+        "claim": "hard",
+        "pass": true
+      },
+      {
+        "part": "p5_tip_elbow",
+        "valid": true,
+        "volume_cm3": 23.3,
+        "bbox_mm": [
+          42.0,
+          88.0,
+          11.8
+        ],
+        "fits_bed_flat": true,
+        "fits_bed_diagonal": true,
+        "est_print_mass_g": 23.0,
+        "claim": "hard",
+        "pass": true
+      },
+      {
+        "part": "p6_clamp_band",
+        "valid": true,
+        "volume_cm3": 3.5,
+        "bbox_mm": [
+          41.4,
+          27.4,
+          10.0
+        ],
+        "fits_bed_flat": true,
+        "fits_bed_diagonal": true,
+        "est_print_mass_g": 3.0,
+        "claim": "hard",
+        "pass": true
+      },
+      {
+        "part": "p7_a4_jig",
+        "valid": true,
+        "volume_cm3": 8.2,
+        "bbox_mm": [
+          70.0,
+          70.0,
+          9.0
+        ],
+        "fits_bed_flat": true,
+        "fits_bed_diagonal": true,
+        "est_print_mass_g": 5.0,
+        "claim": "hard",
+        "pass": true
+      },
+      {
+        "part": "p8_cable_clip",
+        "valid": true,
+        "volume_cm3": 1.8,
+        "bbox_mm": [
+          24.0,
+          12.0,
+          10.0
+        ],
+        "fits_bed_flat": true,
+        "fits_bed_diagonal": true,
+        "est_print_mass_g": 1.0,
+        "claim": "hard",
+        "pass": true
+      },
+      {
+        "part": "p9a_fit_coupon",
+        "valid": true,
+        "volume_cm3": 14.5,
+        "bbox_mm": [
+          70.0,
+          30.0,
+          8.0
+        ],
+        "fits_bed_flat": true,
+        "fits_bed_diagonal": true,
+        "est_print_mass_g": 14.0,
+        "claim": "hard",
+        "pass": true
+      },
+      {
+        "part": "p9b_fit_plug",
+        "valid": true,
+        "volume_cm3": 3.3,
+        "bbox_mm": [
+          11.8,
+          11.6,
+          25.0
+        ],
+        "fits_bed_flat": true,
+        "fits_bed_diagonal": true,
+        "est_print_mass_g": 3.0,
+        "claim": "hard",
+        "pass": true
+      }
+    ],
+    "interface_params": [
+      {
+        "check": "插榫厚 11.8 < 叉口 12.0",
+        "claim": "hard",
+        "pass": true
+      },
+      {
+        "check": "叉口净距 12.2 > 肘节板厚 11.8",
+        "claim": "hard",
+        "pass": true
+      },
+      {
+        "check": "止口 Ø40 < 轴孔 Ø40.4",
+        "claim": "hard",
+        "pass": true
+      },
+      {
+        "check": "M3×6 穿薄耳+缝后剩余 >= 螺母厚",
+        "claim": "hard",
+        "pass": true
+      },
+      {
+        "check": "铜柱 8mm <= 肘节板厚 11.8 - 2",
+        "claim": "hard",
+        "pass": true
+      },
+      {
+        "check": "梁锁点半径 < 颊板沿轴长度",
+        "claim": "hard",
+        "pass": true
+      }
+    ],
+    "collisions": [
+      {
+        "pair": "p4_boom x p2_base_top",
+        "intersect_mm3": 0.0,
+        "tolerance_mm3": 1.0,
+        "claim": "hard",
+        "pass": true
+      },
+      {
+        "pair": "p4_boom x p1_base_tub",
+        "intersect_mm3": 0.0,
+        "tolerance_mm3": 1.0,
+        "claim": "hard",
+        "pass": true
+      },
+      {
+        "pair": "p4_boom x boardcam_proxy",
+        "intersect_mm3": 0.0,
+        "tolerance_mm3": 1.0,
+        "claim": "hard",
+        "pass": true
+      },
+      {
+        "pair": "p5_tip_elbow x boardcam_proxy",
+        "intersect_mm3": 0.0,
+        "tolerance_mm3": 1.0,
+        "claim": "hard",
+        "pass": true
+      },
+      {
+        "pair": "p6_clamp_band x boardcam_proxy",
+        "intersect_mm3": 0.0,
+        "tolerance_mm3": 1.0,
+        "claim": "hard",
+        "pass": true
+      },
+      {
+        "pair": "p6_clamp_band x p5_tip_elbow",
+        "intersect_mm3": 0.0,
+        "tolerance_mm3": 1.0,
+        "claim": "hard",
+        "pass": true
+      },
+      {
+        "pair": "p3_yaw_rotor x p2_base_top",
+        "intersect_mm3": 0.0,
+        "tolerance_mm3": 1.0,
+        "claim": "hard",
+        "pass": true
+      }
+    ],
+    "tipping": {
+      "overturning_Nm": 0.409,
+      "scenarios": [
+        {
+          "fill": "sand",
+          "base_total_kg": 0.92,
+          "restoring_Nm": 0.752,
+          "safety_factor": 1.84,
+          "claim": "hard",
+          "pass": false
+        },
+        {
+          "fill": "steel_grit",
+          "base_total_kg": 2.51,
+          "restoring_Nm": 2.049,
+          "safety_factor": 5.0,
+          "claim": "hard",
+          "pass": true
+        }
+      ]
+    },
+    "boom_deflection": {
+      "note": "工程估计（等效悬臂 + 保守弹性模量），实测验收为准",
+      "service_load_N": 3.0,
+      "service_deflection_mm": 0.65,
+      "proof_load_N": 2.5,
+      "proof_deflection_mm": 0.54,
+      "limit_mm": 3.0,
+      "claim": "soft",
+      "pass": true
+    },
+    "lens_chain": {
+      "slot_floor_z_mm": 139.0,
+      "boardcam_bottom_z_mm": 124.0,
+      "lens_z_mm": 364.9,
+      "required_range_mm": [
+        344.0,
+        384.0
+      ],
+      "assumption": "L_LENS=235mm（镜头光心到叉耳孔心，未实测）",
+      "claim": "hard",
+      "pass": true
+    }
+  },
+  "renders": [
+    "/home/gxxl/nudec-re101/mechanism/camera_stand/renders/assembly_front.png",
+    "/home/gxxl/nudec-re101/mechanism/camera_stand/renders/assembly_side.png",
+    "/home/gxxl/nudec-re101/mechanism/camera_stand/renders/assembly_top.png"
+  ],
+  "unknowns": [
+    "MaixCAM Pro 质量与镜头 FOV",
+    "镜头光心在 boardCam 上的位置（L_LENS 现为 235 假设）",
+    "叉耳槽 Y 向跨度实测值（影响插榫深度 11.8 的配合）",
+    "配重材料密度",
+    "打印实心率（影响质量估计）"
+  ],
+  "hard_claims_pass": true
+}

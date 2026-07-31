@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "command": "sweep-shortest",
+  "result": "FAIL",
+  "magnet_enabled": false,
+  "message": "目标在规划前已超过 deadline",
+  "started_at_ns": 1009303371721,
+  "duration_s": 25.295,
+  "events": [
+    {
+      "error_code": "GLOBAL_TIMEOUT",
+      "route": [],
+      "final_state": "FAILED",
+      "events_path": "workspace/logs/supervisor/sweep-shortest.jsonl"
+    }
+  ],
+  "success": false,
+  "error_code": "GLOBAL_TIMEOUT",
+  "mode": "sweep",
+  "route": [],
+  "duration_ms": 25295,
+  "final_state": "FAILED",
+  "events_path": "workspace/logs/supervisor/sweep-shortest.jsonl"
+}

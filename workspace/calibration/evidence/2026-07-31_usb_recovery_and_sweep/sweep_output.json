@@ -1,0 +1,15 @@
+{
+  "success": true,
+  "error_code": "NONE",
+  "message": "磁铁关闭的巡检完成",
+  "mode": "sweep",
+  "route": [
+    "red-1",
+    "red-2",
+    "red-0",
+    "red-3"
+  ],
+  "duration_ms": 33165,
+  "final_state": "PARKED",
+  "events_path": "workspace/logs/supervisor/sweep.jsonl"
+}

@@ -1,0 +1,111 @@
+{
+  "runId": "576beac6-c80d-4ae6-94ea-047c9e675aa0",
+  "agent": "reviewer",
+  "task": "Final read-only review of .taskman/plans/adopt-puzzle-vision-v2-2/PLAN.md and context.md after amendments. Cross-check AGENTS.md, docs/00_范围与冻结决策.md, docs/01_赛题需求追踪矩阵.md, docs/02_系统总体架构.md, docs/05_OpenCV视觉流水线.md, docs/06_拼图求解器.md, docs/10_接口与数据契约.md, docs/12_测试与验收计划.md, docs/19_决策门与停止条件.md, configs/parameter_registry.yaml, data_contracts/piece_observation.schema.json, data_contracts/placement_plan.schema.json, workspace/src/vision/red_piece_detector.py. Evaluate: repo priorities/safety, external-algorithm strengths correctly adopted, flaws excluded, phase dependencies executable, acceptance criteria falsifiable, interface/frame semantics coherent, and scope not overreaching. Report only blockers or major amendments still needed; explicitly say APPROVED if none. Do not edit files.\n\n---\n**Output:**\nWrite your findings to exactly this path: /home/gxxl/nudec-re101/.pi-subagents/artifacts/outputs/576beac6-c80d-4ae6-94ea-047c9e675aa0/final-plan-review.md\nThis path is authoritative for this run.\nIgnore any other output filename or output path mentioned elsewhere, including output destinations in the base agent prompt, system prompt, or task instructions.\n\n## Acceptance Contract\nAcceptance level: attested\nCompletion is not accepted from prose alone. End with a structured acceptance report.\n\nCriteria:\n- criterion-1: Return concrete findings with file paths and severity when applicable\n\nRequired evidence: review-findings, residual-risks\n\nFinish with a fenced JSON block tagged `acceptance-report` in this shape:\nUse empty arrays when no items apply; array fields contain strings unless object entries are shown.\n`criteriaSatisfied[].status` must be exactly one of: satisfied, not-satisfied, not-applicable.\n`commandsRun[].result` must be exactly one of: passed, failed, not-run.\n`manualNotes` and `notes` are optional strings; an empty string means no note and does not satisfy `manual-notes` evidence.\n```acceptance-report\n{\n  \"criteriaSatisfied\": [\n    {\n      \"id\": \"criterion-1\",\n      \"status\": \"satisfied\",\n      \"evidence\": \"specific proof\"\n    }\n  ],\n  \"changedFiles\": [\n    \"src/file.ts\"\n  ],\n  \"testsAddedOrUpdated\": [\n    \"test/file.test.ts\"\n  ],\n  \"commandsRun\": [\n    {\n      \"command\": \"command\",\n      \"result\": \"passed\",\n      \"summary\": \"short result\"\n    }\n  ],\n  \"validationOutput\": [\n    \"validation output or concise summary\"\n  ],\n  \"residualRisks\": [\n    \"none\"\n  ],\n  \"noStagedFiles\": true,\n  \"diffSummary\": \"short description of the diff\",\n  \"reviewFindings\": [\n    \"blocker: file.ts:12 - issue found, or no blockers\"\n  ],\n  \"manualNotes\": \"anything else the parent should know\"\n}\n```",
+  "exitCode": 0,
+  "model": "kimi-coding/k3:high",
+  "attemptedModels": [
+    "kimi-coding/k3:high"
+  ],
+  "modelAttempts": [
+    {
+      "model": "kimi-coding/k3:high",
+      "success": true,
+      "exitCode": 0,
+      "usage": {
+        "input": 48788,
+        "output": 7697,
+        "cacheRead": 266752,
+        "cacheWrite": 0,
+        "cost": 0.34184459999999994,
+        "turns": 14
+      }
+    }
+  ],
+  "acceptance": {
+    "status": "attested",
+    "evidenceStatus": "attested",
+    "explicit": false,
+    "effectiveAcceptance": {
+      "level": "attested",
+      "explicit": false,
+      "inferredReason": [
+        "read-only/reviewer-style agent"
+      ],
+      "criteria": [
+        {
+          "id": "criterion-1",
+          "must": "Return concrete findings with file paths and severity when applicable",
+          "evidence": [
+            "review-findings",
+            "residual-risks"
+          ],
+          "severity": "required"
+        }
+      ],
+      "evidence": [
+        "review-findings",
+        "residual-risks"
+      ],
+      "verify": [],
+      "stopRules": []
+    },
+    "inferredReason": [
+      "read-only/reviewer-style agent"
+    ],
+    "criteria": [
+      {
+        "id": "criterion-1",
+        "must": "Return concrete findings with file paths and severity when applicable",
+        "evidence": [
+          "review-findings",
+          "residual-risks"
+        ],
+        "severity": "required"
+      }
+    ],
+    "runtimeChecks": [],
+    "verifyRuns": [],
+    "childReport": {
+      "criteriaSatisfied": [
+        {
+          "id": "criterion-1",
+          "status": "satisfied",
+          "evidence": "Concrete findings with file paths and severity in final-plan-review.md: verified-correct items cite PLAN.md sections, docs/00/01/02/05/06/10/12/19, configs/parameter_registry.yaml, both schemas, and red_piece_detector.py (e.g. docs/19 9/10 vs docs/01 18/20 conflict resolved in Phase 0 item 5; docs/10 contour_rectified_px vs schema drift fixed by nested measured_contour). 4 minor Notes with exact locations: schema yaw maximum:180, red_piece_detector.py:130-136 polygon semantics, time.time_ns() wall clock, docs/06 PlacementPlan field list. No blockers; verdict APPROVED."
+        }
+      ],
+      "changedFiles": [],
+      "testsAddedOrUpdated": [],
+      "commandsRun": [
+        {
+          "command": "ls/find/grep cross-checks of docs, data_contracts, workspace/src, evidence files",
+          "result": "passed",
+          "summary": "Confirmed red_pieces_frame.jpg + detection JSON exist; puzzle/ has README only; docs/references and docs/24 do not yet exist (Phase 0 creations); Gate C 9/10 vs 18/20 discrepancy confirmed in docs/19 vs docs/01"
+        }
+      ],
+      "validationOutput": [
+        "Read and cross-checked PLAN.md, context.md against docs/00,01,02,05,06,10,12,19, parameter_registry.yaml, piece_observation.schema.json, placement_plan.schema.json, red_piece_detector.py; all plan references to repo files verified to exist or be planned creations"
+      ],
+      "residualRisks": [
+        "Gate E texture holdout (>=40 ambiguous scenes, >=4 card faces) not yet collected; correctly blocks Gate E only",
+        "Paper-face-up / visible-gap / minimum piece count remain UNKNOWN vs official PDF; plan routes to explicit rejection paths",
+        "Pi 5 performance thresholds unverified until Phase 3/4 benchmarks; plan forbids dev-machine extrapolation"
+      ],
+      "noStagedFiles": true,
+      "diffSummary": "No repo edits; read-only review. Artifact written to .pi-subagents/artifacts/outputs/576beac6-c80d-4ae6-94ea-047c9e675aa0/final-plan-review.md",
+      "reviewFindings": [
+        "no blockers - plan APPROVED",
+        "note (minor): piece_observation.schema.json + placement_plan.schema.json allow yaw maximum:180 inclusive vs plan's [-180,180); tighten in Phase 1",
+        "note (minor): red_piece_detector.py:130-136 exports minAreaRect box as polygon_table_mm while Phase 1 declares polygon is not min-area box; one clarifying sentence needed",
+        "note (minor): red detector uses wall-clock time.time_ns() vs docs/10 monotonic requirement; Phase 0 replay baseline must not assert monotonicity for red path",
+        "note (minor): docs/06 PlacementPlan field list (source_yaw_deg, solver_confidence) drifts from current schema; include in Phase 1 doc sync",
+        "correct: pre-existing Gate C conflict (docs/19 '9/10' vs docs/01 R4 '18/20') explicitly unified in Phase 0 item 5"
+      ],
+      "manualNotes": "The four notes are documentation/schema-wording level items naturally resolved inside Phase 0/1 scope; none require plan amendment before execution begins. Full evidence in final-plan-review.md."
+    }
+  },
+  "launchContractDigest": "ff2ba83724b303e6b24662e0b5a3b4b295acc4a09eb0c14183c6f1b1d20e92b3",
+  "transcriptPath": "/home/gxxl/nudec-re101/.pi-subagents/artifacts/576beac6-c80d-4ae6-94ea-047c9e675aa0_reviewer_transcript.jsonl",
+  "skills": [],
+  "timestamp": 1785485591151
+}

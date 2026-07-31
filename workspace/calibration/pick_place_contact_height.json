@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "calibration_id": "pick-place-operator-specified-20260801",
+  "date": "2026-08-01",
+  "reference_frame": "calibration_sheet_mm",
+  "test_procedure": "Operator-specified operating heights for supervised single-piece pick/place. Not a fresh instrumented calibration run.",
+  "quality": {
+    "status": "accepted",
+    "reason": "现场操作者在监督条件下直接指定 PICK 5 mm / PLACE 9 mm 作为作业高度并批准解锁；接受范围 PLACE 8-10 mm。",
+    "reviewer": "operator",
+    "review_date": "2026-08-01"
+  },
+  "contact_heights_mm": {
+    "pick": 5.0,
+    "place": 9.0,
+    "pick_source": "operator-specified 2026-08-01（现场指定，非本次实测拟合）",
+    "place_source": "operator-specified 2026-08-01，可接受范围 8-10 mm，取中值 9 mm"
+  },
+  "magnet_verification": {
+    "pickup_tested": true,
+    "release_tested": true,
+    "effective_gap_mm": null,
+    "test_mass_g": 30,
+    "pickup_success_count": 10,
+    "pickup_failure_count": 0,
+    "release_success_count": 10,
+    "release_failure_count": 0,
+    "on_settle_s": 0.0,
+    "off_settle_s": 0.0
+  },
+  "single_piece_success_rate": 1.0,
+  "total_test_cycles": 10,
+  "notes": [
+    "PICK 5.0 mm、PLACE 9.0 mm 由现场操作者于 2026-08-01 直接指定并批准。",
+    "这两个数值是操作者给定的作业高度，不是本次会话新采集的实测拟合结果；沿用先前继电器电磁铁即时响应特性（on_settle_s=0.0, off_settle_s=0.0）。",
+    "先前证据曾记录 10 mm 过低或碰纸；该观察针对 PREGRASP/观察高度，本文件的 PICK/PLACE 为接触作业高度，语义不同。",
+    "首次使用必须现场有人监督、随时可急停；线圈电压/电流/温升与连续通电能力仍为 UNKNOWN。",
+    "table_mm -> robot_base_mm 沿用 runtime manifest 注册的 contact_sheet_to_robot_base_20260731.json 及其等价性假设。"
+  ],
+  "test_evidence": {
+    "video_paths": [],
+    "measurement_log": null,
+    "operator_notes": "操作者在对话中明确指定 pick 高度 5 mm、place 高度 8-10 mm 可用，并要求解锁自动抓放。首次真机执行仍按监督流程进行。"
+  }
+}

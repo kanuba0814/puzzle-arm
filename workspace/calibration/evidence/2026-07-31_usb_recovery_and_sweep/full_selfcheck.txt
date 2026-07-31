@@ -1,0 +1,39 @@
+[PASS] architecture: aarch64
+[PASS] python: 3.13.5
+[PASS] package:lerobot: expected=0.6.0, actual=0.6.0
+[PASS] package:torch: expected=2.7.1, actual=2.7.1
+[PASS] package:torchvision: expected=0.22.1, actual=0.22.1
+[PASS] package:numpy: expected=2.2.6, actual=2.2.6
+[PASS] package:opencv-python-headless: expected=4.13.0.90, actual=4.13.0.90
+[PASS] package:feetech-servo-sdk: expected=1.0.0, actual=1.0.0
+[PASS] package:lerobot_robot_so101_5d: expected=0.2.0, actual=0.2.0
+[PASS] package:pygame-runtime: pygame-ce=NOT_INSTALLED; pygame=2.6.1
+[PASS] import:numpy: /opt/epuzzle/venv/lib/python3.13/site-packages/numpy/__init__.py
+[PASS] import:cv2: /opt/epuzzle/venv/lib/python3.13/site-packages/cv2/__init__.py
+[PASS] import:pygame: /usr/lib/python3/dist-packages/pygame/__init__.py
+[PASS] import:torch: /opt/epuzzle/venv/lib/python3.13/site-packages/torch/__init__.py
+[PASS] import:torchvision: /opt/epuzzle/venv/lib/python3.13/site-packages/torchvision/__init__.py
+[PASS] import:lerobot: /opt/epuzzle/venv/lib/python3.13/site-packages/lerobot/__init__.py
+[PASS] import:scservo_sdk: /opt/epuzzle/venv/lib/python3.13/site-packages/scservo_sdk/__init__.py
+[PASS] import:lerobot_robot_so101_5d: /opt/epuzzle/workspace/src/robot_plugin/lerobot_robot_so101_5d/lerobot_robot_so101_5d/__init__.py
+[PASS] five_axis_feature_contract: ('shoulder_pan.pos', 'shoulder_lift.pos', 'elbow_flex.pos', 'wrist_flex.pos', 'wrist_roll.pos')
+[PASS] bumpless_connect_contract: SO101Follower5D.connect_bumpless=True
+[PASS] feature_gate:EPUZZLE_ACT_ENABLED: environment=0; registry matched; expected act_enabled: false
+[PASS] feature_gate:EPUZZLE_GENERIC_VISION_ENABLED: environment=0; registry matched; expected generic_vision_enabled: false
+[PASS] feature_gate:EPUZZLE_TEXTURE_ENABLED: environment=0; registry matched; expected texture_enabled: false
+[PASS] feature_gate:EPUZZLE_MAGNET_ENABLED: environment=1; registry matched; expected magnet_enabled: true
+[PASS] feature_gate:automatic_pick_place: registry matched; automatic PICK/PLACE must remain false
+[PASS] board: Raspberry Pi 5 Model B Rev 1.0
+[PASS] memory: 7.87 GiB
+[PASS] power_throttling: throttled=0x0
+[PASS] temperature: 51.8 C
+[PASS] robot_port: /dev/epuzzle-arm
+[PASS] camera_device: /dev/epuzzle-camera
+[PASS] robot_motion_lock: absent=/etc/epuzzle/robot-motion.lock.json
+[PASS] magnet_gpio_frozen: 17
+[PASS] magnet_relay_active_low: 0
+[PASS] magnet_timeout: 10
+[PASS] calibration_bundle: ok
+[PASS] inspection_parameters: magnet-off inspection parameters frozen
+[WARN] deferred_unknown_parameters: UNKNOWN count=37; deferred features remain gated
+READY

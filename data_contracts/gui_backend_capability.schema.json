@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "gui_backend_capability.schema.json",
+  "title": "GuiBackendCapability",
+  "description": "CompetitionBackend 返回的单个命令能力声明；GUI 据此禁用按钮并显示原因。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "command_id",
+    "availability",
+    "reason",
+    "requires_robot",
+    "requires_manual_unlock"
+  ],
+  "properties": {
+    "command_id": {
+      "type": "string",
+      "description": "命令 ID，与 competition_backend.py 中能力表一致。"
+    },
+    "availability": {
+      "enum": ["READY", "LOCKED", "UNAVAILABLE"],
+      "description": "READY 表示可执行；LOCKED 表示门禁未满足；UNAVAILABLE 表示后端未接入。"
+    },
+    "reason": {
+      "type": "string",
+      "description": "人类可读的原因，直接上屏。"
+    },
+    "requires_robot": {
+      "type": "boolean"
+    },
+    "requires_manual_unlock": {
+      "type": "boolean"
+    }
+  }
+}

@@ -1,0 +1,36 @@
+services:
+  astra-camera:
+    build:
+      context: .
+    image: epuzzle/astra-s-ros:noetic
+    network_mode: host
+    privileged: true
+    volumes:
+      - /dev/bus/usb:/dev/bus/usb
+    environment:
+      ROS_MASTER_URI: http://127.0.0.1:11311
+      ROS_IP: 127.0.0.1
+    command:
+      - roslaunch
+      - astra_camera
+      - astra.launch
+
+  test:
+    image: epuzzle/astra-s-ros:noetic
+    network_mode: host
+    environment:
+      ROS_MASTER_URI: http://127.0.0.1:11311
+      ROS_IP: 127.0.0.1
+    entrypoint: /bin/bash
+    command:
+      - -lc
+      - |
+        source /opt/ros/noetic/setup.bash
+        source /opt/astra_ws/devel/setup.bash
+        set -euo pipefail
+        timeout 30 rostopic echo -n 1 /camera/depth/image_raw/header
+        timeout 30 rostopic echo -n 1 /camera/depth/camera_info
+        rosservice call /camera/get_device_info "{}"
+        echo "Astra S depth stream test passed."
+    depends_on:
+      - astra-camera

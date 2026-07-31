@@ -1,0 +1,280 @@
+{
+  "schema_version": 1,
+  "model": "fixed-geometry planar fit; optimize J2-J4 zero offsets and sheet rigid transform",
+  "holdout_used_during_fit": false,
+  "fit_optimizer_xyz_rmse_mm": 2.118765,
+  "fit_metrics": {
+    "xy_rms_mm": 2.84885,
+    "xy_max_mm": 3.922099,
+    "z_rms_mm": 2.313341,
+    "z_max_abs_mm": 3.865867
+  },
+  "holdout_metrics": {
+    "xy_rms_mm": 2.480912,
+    "xy_max_mm": 3.406456,
+    "z_rms_mm": 1.534978,
+    "z_max_abs_mm": 2.458668
+  },
+  "metric_gate_pass": true,
+  "metric_limits": {
+    "holdout_xy_rms_mm": 5.0,
+    "holdout_xy_max_mm": 8.0,
+    "holdout_z_max_abs_mm": 3.0
+  },
+  "tool_pitch_deg_on_fit_contacts": {
+    "mean": -91.853838,
+    "min": -93.546145,
+    "max": -89.590101
+  },
+  "requested_quality_status": "accepted",
+  "acceptance_decision": "operator explicitly accepted the metric-passing calibration while retaining the recorded non-metric risks",
+  "recorded_non_metric_risks": [
+    "hand-drawn target placement uncertainty is not quantified",
+    "magnet extension has one caliper reading; repeatability is UNKNOWN",
+    "historical URDF source SHA256 is UNKNOWN",
+    "practical soft limits do not constitute a complete self-collision map"
+  ],
+  "soft_limit_basis": "same-arm calibrated motor endpoints with conservative margins; J5 additionally limited for cable twist",
+  "points": [
+    {
+      "label": "A",
+      "role": "fit",
+      "target_sheet_mm": [
+        35.0,
+        250.0,
+        0.0
+      ],
+      "predicted_sheet_mm": [
+        33.477851,
+        246.675391,
+        2.202585
+      ],
+      "error_mm": [
+        -1.522149,
+        -3.324609,
+        2.202585
+      ],
+      "xy_error_mm": 3.656496
+    },
+    {
+      "label": "B",
+      "role": "fit",
+      "target_sheet_mm": [
+        105.0,
+        250.0,
+        0.0
+      ],
+      "predicted_sheet_mm": [
+        108.093634,
+        252.41087,
+        -1.989578
+      ],
+      "error_mm": [
+        3.093634,
+        2.41087,
+        -1.989578
+      ],
+      "xy_error_mm": 3.922099
+    },
+    {
+      "label": "D",
+      "role": "fit",
+      "target_sheet_mm": [
+        175.0,
+        250.0,
+        0.0
+      ],
+      "predicted_sheet_mm": [
+        174.849523,
+        250.262002,
+        2.325962
+      ],
+      "error_mm": [
+        -0.150477,
+        0.262002,
+        2.325962
+      ],
+      "xy_error_mm": 0.30214
+    },
+    {
+      "label": "E",
+      "role": "fit",
+      "target_sheet_mm": [
+        35.0,
+        170.0,
+        0.0
+      ],
+      "predicted_sheet_mm": [
+        33.682156,
+        170.727402,
+        -2.027479
+      ],
+      "error_mm": [
+        -1.317844,
+        0.727402,
+        -2.027479
+      ],
+      "xy_error_mm": 1.505266
+    },
+    {
+      "label": "F",
+      "role": "fit",
+      "target_sheet_mm": [
+        105.0,
+        170.0,
+        0.0
+      ],
+      "predicted_sheet_mm": [
+        105.89849,
+        173.206281,
+        -0.195121
+      ],
+      "error_mm": [
+        0.89849,
+        3.206281,
+        -0.195121
+      ],
+      "xy_error_mm": 3.329793
+    },
+    {
+      "label": "G",
+      "role": "fit",
+      "target_sheet_mm": [
+        175.0,
+        170.0,
+        0.0
+      ],
+      "predicted_sheet_mm": [
+        172.805733,
+        168.467631,
+        -3.865867
+      ],
+      "error_mm": [
+        -2.194267,
+        -1.532369,
+        -3.865867
+      ],
+      "xy_error_mm": 2.676371
+    },
+    {
+      "label": "H",
+      "role": "fit",
+      "target_sheet_mm": [
+        35.0,
+        80.0,
+        0.0
+      ],
+      "predicted_sheet_mm": [
+        34.110876,
+        81.236191,
+        0.509972
+      ],
+      "error_mm": [
+        -0.889124,
+        1.236191,
+        0.509972
+      ],
+      "xy_error_mm": 1.522731
+    },
+    {
+      "label": "I",
+      "role": "fit",
+      "target_sheet_mm": [
+        105.0,
+        80.0,
+        0.0
+      ],
+      "predicted_sheet_mm": [
+        107.081737,
+        77.014232,
+        3.039526
+      ],
+      "error_mm": [
+        2.081737,
+        -2.985768,
+        3.039526
+      ],
+      "xy_error_mm": 3.639841
+    },
+    {
+      "label": "M",
+      "role": "holdout",
+      "target_sheet_mm": [
+        70.0,
+        210.0,
+        0.0
+      ],
+      "predicted_sheet_mm": [
+        67.622706,
+        209.760032,
+        0.559758
+      ],
+      "error_mm": [
+        -2.377294,
+        -0.239968,
+        0.559758
+      ],
+      "xy_error_mm": 2.389375
+    },
+    {
+      "label": "N",
+      "role": "holdout",
+      "target_sheet_mm": [
+        140.0,
+        210.0,
+        0.0
+      ],
+      "predicted_sheet_mm": [
+        137.918182,
+        211.658557,
+        -2.458668
+      ],
+      "error_mm": [
+        -2.081818,
+        1.658557,
+        -2.458668
+      ],
+      "xy_error_mm": 2.661725
+    },
+    {
+      "label": "O",
+      "role": "holdout",
+      "target_sheet_mm": [
+        70.0,
+        120.0,
+        0.0
+      ],
+      "predicted_sheet_mm": [
+        70.1096,
+        116.595308,
+        0.060633
+      ],
+      "error_mm": [
+        0.1096,
+        -3.404692,
+        0.060633
+      ],
+      "xy_error_mm": 3.406456
+    },
+    {
+      "label": "P",
+      "role": "holdout",
+      "target_sheet_mm": [
+        140.0,
+        120.0,
+        0.0
+      ],
+      "predicted_sheet_mm": [
+        139.540345,
+        119.89712,
+        -1.75002
+      ],
+      "error_mm": [
+        -0.459655,
+        -0.10288,
+        -1.75002
+      ],
+      "xy_error_mm": 0.471027
+    }
+  ]
+}

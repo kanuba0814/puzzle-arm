@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "calibration_id": "legacy-planar-AH-20260731-rejected",
+  "robot_type": "so101_follower_5d",
+  "source_arm": "so101_follower_modified_single_arm",
+  "frame": "robot_base_mm",
+  "joint_features": [
+    "shoulder_pan.pos",
+    "shoulder_lift.pos",
+    "elbow_flex.pos",
+    "wrist_flex.pos",
+    "wrist_roll.pos"
+  ],
+  "geometry_mm": {
+    "shoulder_height": 104.1573,
+    "shoulder_radial_offset": 0.0,
+    "shoulder_lateral_offset": 0.0,
+    "upper_arm": 116.0,
+    "forearm": 135.0,
+    "tool_forward": 98.1,
+    "tool_normal": 0.0
+  },
+  "joint_mapping": {
+    "directions": [
+      1,
+      1,
+      1,
+      1,
+      1
+    ],
+    "zero_offsets_deg": [
+      0.0,
+      0.9248,
+      3.5343,
+      28.6032,
+      0.0
+    ],
+    "soft_limits_deg": [
+      [
+        -103.0,
+        103.0
+      ],
+      [
+        -21.0,
+        82.0
+      ],
+      [
+        -177.0,
+        2.0
+      ],
+      [
+        -98.0,
+        100.0
+      ],
+      [
+        -254.0,
+        88.0
+      ]
+    ]
+  },
+  "quality": {
+    "status": "rejected",
+    "fit_samples": 8,
+    "holdout_samples": 4,
+    "holdout_xy_rms_mm": 9.011,
+    "holdout_xy_max_mm": 11.421,
+    "holdout_z_max_abs_mm": 5.52
+  },
+  "evidence_sha256": [
+    "d2e7c4ff9605d3b00446c91f777d1f6d23e684e9b72ca41f1ad7276144abe1c2",
+    "ab0dab3850d2ee7e64175250def0658ce2e7658330e8d2b0d040e49e6fa55db8",
+    "f00bd841cf9bbcd7ffc165bad7fab94a6249542d1d2c4390b8d00fb317286c15"
+  ]
+}

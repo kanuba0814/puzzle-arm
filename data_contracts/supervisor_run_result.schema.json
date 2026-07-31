@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "supervisor_run_result.schema.json",
+  "title": "SupervisorRunResult",
+  "description": "supervisor_run.py 单次页面动作的最终结果；GUI 只依据本文件与 returncode 判定成败，不解析 stdout。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "command",
+    "result",
+    "magnet_enabled",
+    "message",
+    "started_at_ns",
+    "duration_s",
+    "events"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "command": {
+      "enum": [
+        "detect",
+        "red-baseline",
+        "sweep-shortest",
+        "pregrasp",
+        "park",
+        "puzzle-shadow",
+        "pick-place",
+        "repeat",
+        "commission-center",
+        "competition-self-color",
+        "competition-white",
+        "competition-card",
+        "manual-read-state",
+        "manual-jog-joint",
+        "manual-jog-cartesian",
+        "manual-magnet-pulse",
+        "manual-magnet-off"
+      ]
+    },
+    "result": {
+      "enum": ["PASS", "FAIL", "ABORTED"]
+    },
+    "magnet_enabled": {
+      "type": "boolean",
+      "description": "本次动作是否启用过电磁铁；shadow/巡检类动作必须为 false。"
+    },
+    "message": {
+      "type": "string",
+      "description": "失败原因或补充说明，原文上屏。"
+    },
+    "started_at_ns": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "duration_s": {
+      "type": "number",
+      "minimum": 0
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "success": {
+      "type": "boolean"
+    },
+    "error_code": {
+      "type": "string"
+    },
+    "mode": {
+      "enum": ["scan", "sweep", "repeat", "pregrasp", "shadow-plan", "park", "pick-place", "manual-magnet-pulse", "manual-magnet-off", "commission-center"]
+    },
+    "route": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "duration_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "final_state": {
+      "type": "string"
+    },
+    "events_path": {
+      "type": "string"
+    },
+    "report": {
+      "type": "object"
+    },
+    "final_joint_deg": {
+      "type": "object",
+      "description": "结束后实际五轴读回；字段名必须来自固定五轴顺序。",
+      "propertyNames": {
+        "enum": [
+          "shoulder_pan",
+          "shoulder_lift",
+          "elbow_flex",
+          "wrist_flex",
+          "wrist_roll"
+        ]
+      },
+      "additionalProperties": {
+        "type": "number"
+      }
+    }
+  }
+}

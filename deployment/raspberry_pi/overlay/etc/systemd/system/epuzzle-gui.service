@@ -1,0 +1,42 @@
+[Unit]
+Description=E Puzzle 7-inch framebuffer GUI
+After=epuzzle-magnet-safe.service
+Wants=epuzzle-magnet-safe.service
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/epuzzle/epuzzle.env
+Environment=EP_GUI_ON_VT=1
+WorkingDirectory=/opt/epuzzle
+ExecStart=/opt/epuzzle/workspace/tools/start_pick_place_page.sh
+Restart=on-failure
+RestartSec=2s
+TimeoutStartSec=30s
+TimeoutStopSec=10s
+KillSignal=SIGINT
+User=epuzzle
+Group=epuzzle
+SupplementaryGroups=video input render dialout gpio
+UMask=0027
+StandardInput=tty
+StandardOutput=journal
+StandardError=journal
+TTYPath=/dev/tty2
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=read-only
+ProtectSystem=strict
+ReadOnlyPaths=/opt/epuzzle
+ReadWritePaths=/opt/epuzzle/workspace/runtime /opt/epuzzle/workspace/logs
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

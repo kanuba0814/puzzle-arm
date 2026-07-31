@@ -1,0 +1,5 @@
+[Unit]
+Description=E Puzzle upper-computer stack
+Wants=epuzzle-magnet-safe.service epuzzle-gui.service
+After=multi-user.target epuzzle-magnet-safe.service
+AllowIsolate=yes

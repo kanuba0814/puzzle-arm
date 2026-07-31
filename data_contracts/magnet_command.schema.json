@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MagnetCommand",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "enabled"
+  ],
+  "properties": {
+    "enabled": {
+      "type": "boolean",
+      "description": "true 表示请求吸合，false 表示请求释放；硬件超时上限不可由调用方覆盖。"
+    }
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CalibrationSheetToRobotTransform",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "transform_id",
+    "from_frame",
+    "to_frame",
+    "translation_unit",
+    "rotation_unit",
+    "yaw_deg",
+    "translation_mm",
+    "inverse_sheet_from_robot",
+    "evidence_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "transform_id": {"type": "string", "minLength": 1},
+    "from_frame": {"const": "calibration_sheet_mm"},
+    "to_frame": {"const": "robot_base_mm"},
+    "translation_unit": {"const": "mm"},
+    "rotation_unit": {"const": "degree"},
+    "yaw_deg": {"type": "number"},
+    "translation_mm": {
+      "type": "array",
+      "items": {"type": "number"},
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "inverse_sheet_from_robot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["yaw_deg", "translation_mm"],
+      "properties": {
+        "yaw_deg": {"type": "number"},
+        "translation_mm": {
+          "type": "array",
+          "items": {"type": "number"},
+          "minItems": 3,
+          "maxItems": 3
+        }
+      }
+    },
+    "evidence_sha256": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      },
+      "minItems": 1
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+    "extraPaths": [
+        "official_docs/lerobot_v0.6.0/src",
+        "workspace/src",
+        "workspace/src/robot_plugin/lerobot_robot_so101_5d",
+        "mechanism/camera_stand",
+        "mechanism/camera_stand/parts",
+        "/home/gxxl/miniconda3/lib/python3.13/site-packages"
+    ],
+    "include": [
+        "workspace/src",
+        "workspace/tests",
+        "workspace/tools",
+        "mechanism"
+    ],
+    "exclude": [
+        "deployment/raspberry_pi/cache",
+        "official_docs/lerobot_v0.6.0"
+    ],
+    "pythonVersion": "3.13",
+    "typeCheckingMode": "basic"
+}

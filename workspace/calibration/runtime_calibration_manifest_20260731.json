@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "manifest_id": "single-arm-competition-runtime-20260731",
+  "robot_type": "so101_follower_5d",
+  "source_arm": "so101_follower_modified_single_arm",
+  "joint_features": [
+    "shoulder_pan.pos",
+    "shoulder_lift.pos",
+    "elbow_flex.pos",
+    "wrist_flex.pos",
+    "wrist_roll.pos"
+  ],
+  "artifacts": {
+    "motor_calibration": {
+      "runtime_file": "/home/epuzzle/.cache/huggingface/lerobot/calibration/robots/so101_follower_5d/epuzzle-single-arm.json",
+      "sha256": "89ea5079eb9bb35012866d736d0438d419ee57c201e51e11a61530e3e6440ca8"
+    },
+    "kinematic_calibration": {
+      "file": "workspace/calibration/arm_kinematics_single_arm_accepted_20260731.json",
+      "sha256": "c207bae180e187b6c639cc848320195dafce1f468920a0f2eba7f00c621eab38",
+      "status": "accepted",
+      "holdout_xy_rms_mm": 2.480912,
+      "holdout_xy_max_mm": 3.406456,
+      "holdout_z_max_abs_mm": 2.458668
+    },
+    "table_to_robot": {
+      "file": "workspace/calibration/contact_sheet_to_robot_base_20260731.json",
+      "sha256": "151d447b7a1ff144295aabcbb11e60ade643cbad908b5b65f06b4d8f06f8b271",
+      "from_frame": "table_mm",
+      "to_frame": "robot_base_mm",
+      "equivalence_note": "GUI A4 uses the same bottom-left/x-right/y-up convention as the calibrated contact sheet; retained as an explicit runtime assumption."
+    },
+    "gui_a4_homography": {
+      "file": "workspace/calibration/table_homography_gui_20260731.npy",
+      "sha256": "d82e6514f9943d63f34649b1b6b228c1fda5a35be17ae6463d6b029fca9f3694",
+      "direction": "image_px_to_table_mm",
+      "image_size_px": [1280, 720],
+      "rms_mm": 0.257541,
+      "max_mm": 1.029862,
+      "corners": 57
+    },
+    "park_pose": {
+      "file": "workspace/calibration/park_pose_single_arm_20260731.json",
+      "sha256": "1c14bd574e0a1976d8ae5e7b303aecdcd4ec3a08aeefefc2531f82eaf00276d9",
+      "park_id": "single-arm-formal-park-20260731",
+      "supported_pose": true
+    },
+    "precision_terminal_compensation": {
+      "file": "workspace/calibration/evidence/2026-07-31_first_hardware_motion/production_precision_compensation.json",
+      "sha256": "b0a19ff5a07e37e6f3ec825865376ccbab9f05f9370df85be497bb5e478080d2",
+      "radial_away_from_robot_mm": 3.0,
+      "command_pitch_deg": -87.5,
+      "observed_loaded_pitch_deg": -90.029661,
+      "p_coefficient_raw": 24,
+      "acceleration_raw": 30
+    }
+  },
+  "motion_heights_mm": {
+    "safe": 60.0,
+    "pregrasp": 20.0,
+    "pick": "UNKNOWN",
+    "preplace": 20.0,
+    "place": "UNKNOWN"
+  },
+  "vision_validation": {
+    "red_piece_count": 4,
+    "detection_evidence_sha256": "91e25b68fc603add0b33a388879cf2ccc1abf16e575a15d35667a6d9a3aca369",
+    "repeat_and_sweep_evidence_sha256": "8bad3f7567dee6a8b1be3b8f833554a04e13d1b55f95779a93552fd17ed22391",
+    "repeat_fk_xy_delta_mm": 1.104762,
+    "repeat_joint_max_abs_delta_deg": 0.263736,
+    "swept_piece_count": 4,
+    "result": "PASS"
+  },
+  "safety": {
+    "magnet_gpio_chip": "/dev/gpiochip0",
+    "magnet_gpio_line_bcm": 17,
+    "magnet_max_on_seconds": 10.0,
+    "act_enabled": false,
+    "automatic_pick_place_enabled": false,
+    "automatic_pick_place_blocker": "PICK and PLACE contact heights remain UNKNOWN"
+  }
+}

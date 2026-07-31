@@ -1,0 +1,21 @@
+#!/bin/bash
+set -euo pipefail
+
+WHEELHOUSE=/opt/epuzzle/offline/wheelhouse
+REQUIREMENTS=/opt/epuzzle/offline/requirements-arm64.in
+TARGET=/opt/epuzzle/venv.rebuild
+
+if [[ ${EUID} -ne 0 ]]; then
+    echo "请使用 sudo 运行。" >&2
+    exit 1
+fi
+(cd "$WHEELHOUSE" && sha256sum -c SHA256SUMS)
+rm -rf "$TARGET"
+python3 -m venv "$TARGET"
+"$TARGET/bin/python" -m pip install --no-index --find-links "$WHEELHOUSE" --no-cache-dir -r "$REQUIREMENTS"
+"$TARGET/bin/python" -c 'import cv2, lerobot, numpy, pygame, scservo_sdk, torch, torchvision; import lerobot_robot_so101_5d'
+if [[ -d /opt/epuzzle/venv ]]; then
+    mv /opt/epuzzle/venv "/opt/epuzzle/venv.previous.$(date +%s)"
+fi
+mv "$TARGET" /opt/epuzzle/venv
+/usr/local/sbin/epuzzle-selfcheck --software-only

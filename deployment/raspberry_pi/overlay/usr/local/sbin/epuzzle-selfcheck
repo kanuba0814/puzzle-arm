@@ -1,0 +1,419 @@
+#!/usr/bin/python3
+"""树莓派上位机软件/硬件自检；不发送舵机动作，不开启电磁铁。"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import importlib
+import importlib.metadata
+import json
+import os
+import platform
+import re
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
+
+# 正式 GUI 使用系统 pygame 做 framebuffer 离屏绘制，同时复用冻结 venv 的
+# OpenCV/LeRobot/torch。自检必须复现同一模块搜索路径，不能只检查 venv。
+for runtime_path in reversed(
+    (
+        "/opt/epuzzle/workspace/src/robot_plugin/lerobot_robot_so101_5d",
+        "/opt/epuzzle/workspace/src",
+        "/opt/epuzzle/venv/lib/python3.13/site-packages",
+        "/usr/lib/python3/dist-packages",
+    )
+):
+    if runtime_path not in sys.path:
+        sys.path.insert(0, runtime_path)
+
+EXPECTED_PACKAGES = {
+    "lerobot": "0.6.0",
+    "torch": "2.7.1",
+    "torchvision": "0.22.1",
+    "numpy": "2.2.6",
+    "opencv-python-headless": "4.13.0.90",
+    "feetech-servo-sdk": "1.0.0",
+    "lerobot_robot_so101_5d": "0.2.0",
+}
+EXPECTED_GUI_PACKAGES = {
+    "pygame-ce": "2.5.5",
+    "pygame": "2.6.1",
+}
+EXPECTED_IMPORTS = (
+    "numpy",
+    "cv2",
+    "pygame",
+    "torch",
+    "torchvision",
+    "lerobot",
+    "scservo_sdk",
+    "lerobot_robot_so101_5d",
+)
+EXPECTED_FEATURES = (
+    "shoulder_pan.pos",
+    "shoulder_lift.pos",
+    "elbow_flex.pos",
+    "wrist_flex.pos",
+    "wrist_roll.pos",
+)
+FROZEN_CALIBRATION_FILES = (
+    "workspace/calibration/runtime_calibration_manifest_20260731.json",
+    "workspace/calibration/arm_kinematics_single_arm_accepted_20260731.json",
+    "workspace/calibration/contact_sheet_to_robot_base_20260731.json",
+    "workspace/calibration/table_homography_gui_20260731.npy",
+    "workspace/calibration/park_pose_single_arm_20260731.json",
+)
+PROJECT_ROOT = Path(os.environ.get("EPUZZLE_PROJECT_ROOT", "/opt/epuzzle"))
+ENV_PATH = Path(os.environ.get("EPUZZLE_ENV_PATH", "/etc/epuzzle/epuzzle.env"))
+
+
+def result(
+    name: str, passed: bool, detail: str, severity: str = "error"
+) -> dict[str, Any]:
+    return {"name": name, "passed": passed, "detail": detail, "severity": severity}
+
+
+def load_environment() -> dict[str, str]:
+    environment: dict[str, str] = {}
+    if not ENV_PATH.is_file():
+        return environment
+    for raw_line in ENV_PATH.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        environment[key] = value
+    return environment
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as file_handle:
+        for chunk in iter(lambda: file_handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def package_checks() -> list[dict[str, Any]]:
+    checks: list[dict[str, Any]] = []
+    for package_name, expected_version in EXPECTED_PACKAGES.items():
+        try:
+            actual_version = importlib.metadata.version(package_name)
+        except importlib.metadata.PackageNotFoundError:
+            actual_version = "NOT_INSTALLED"
+        checks.append(
+            result(
+                f"package:{package_name}",
+                actual_version == expected_version,
+                f"expected={expected_version}, actual={actual_version}",
+            )
+        )
+    gui_versions: list[str] = []
+    gui_runtime_ok = False
+    for package_name, expected_version in EXPECTED_GUI_PACKAGES.items():
+        try:
+            actual_version = importlib.metadata.version(package_name)
+        except importlib.metadata.PackageNotFoundError:
+            actual_version = "NOT_INSTALLED"
+        gui_versions.append(f"{package_name}={actual_version}")
+        gui_runtime_ok |= actual_version == expected_version
+    checks.append(
+        result(
+            "package:pygame-runtime",
+            gui_runtime_ok,
+            "; ".join(gui_versions),
+        )
+    )
+    return checks
+
+
+def software_checks() -> list[dict[str, Any]]:
+    checks: list[dict[str, Any]] = [
+        result("architecture", platform.machine() == "aarch64", platform.machine()),
+        result("python", sys.version_info >= (3, 13), platform.python_version()),
+    ]
+    checks.extend(package_checks())
+    for module_name in EXPECTED_IMPORTS:
+        try:
+            imported_module = importlib.import_module(module_name)
+            module_path = getattr(imported_module, "__file__", "built-in")
+            checks.append(result(f"import:{module_name}", True, str(module_path)))
+        except Exception as exception:  # noqa: BLE001
+            checks.append(result(f"import:{module_name}", False, repr(exception)))
+
+    try:
+        from lerobot_robot_so101_5d import JOINT_FEATURES, SO101Follower5D
+
+        actual_features = tuple(JOINT_FEATURES)
+        bumpless_available = callable(
+            getattr(SO101Follower5D, "connect_bumpless", None)
+        )
+    except Exception as exception:  # noqa: BLE001
+        actual_features = (f"IMPORT_ERROR:{exception}",)
+        bumpless_available = False
+    checks.append(
+        result(
+            "five_axis_feature_contract",
+            actual_features == EXPECTED_FEATURES
+            and "gripper.pos" not in actual_features,
+            repr(actual_features),
+        )
+    )
+    checks.append(
+        result(
+            "bumpless_connect_contract",
+            bumpless_available,
+            f"SO101Follower5D.connect_bumpless={bumpless_available}",
+        )
+    )
+    return checks
+
+
+def feature_gate_checks(
+    environment: dict[str, str], project_root: Path = PROJECT_ROOT
+) -> list[dict[str, Any]]:
+    expected_gates = {
+        "EPUZZLE_ACT_ENABLED": ("0", "act_enabled: false"),
+        "EPUZZLE_GENERIC_VISION_ENABLED": (
+            "0",
+            "generic_vision_enabled: false",
+        ),
+        "EPUZZLE_TEXTURE_ENABLED": ("0", "texture_enabled: false"),
+        "EPUZZLE_MAGNET_ENABLED": ("1", "magnet_enabled: true"),
+    }
+    registry_path = project_root / "configs/parameter_registry.yaml"
+    try:
+        registry_text = registry_path.read_text(encoding="utf-8")
+    except OSError as exception:
+        registry_text = ""
+        registry_detail = f"missing registry: {exception}"
+    else:
+        registry_detail = "registry matched"
+
+    checks = []
+    for name, (expected_value, registry_expected) in expected_gates.items():
+        actual = environment.get(name, os.environ.get(name, "UNSET"))
+        checks.append(
+            result(
+                f"feature_gate:{name}",
+                actual == expected_value and registry_expected in registry_text,
+                f"environment={actual}; {registry_detail}; expected {registry_expected}",
+            )
+        )
+    checks.append(
+        result(
+            "feature_gate:automatic_pick_place",
+            "automatic_pick_place_enabled: false" in registry_text,
+            f"{registry_detail}; automatic PICK/PLACE must remain false",
+        )
+    )
+    return checks
+
+
+def read_total_memory_gib() -> float:
+    meminfo = Path("/proc/meminfo").read_text(encoding="utf-8")
+    match = re.search(r"^MemTotal:\s+(\d+)\s+kB$", meminfo, re.MULTILINE)
+    return int(match.group(1)) / 1024 / 1024 if match else 0.0
+
+
+def command_output(command: list[str]) -> str:
+    try:
+        completed = subprocess.run(
+            command, check=False, capture_output=True, text=True, timeout=5
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exception:
+        return f"ERROR:{exception}"
+    output = (completed.stdout or completed.stderr).strip()
+    return output or f"exit={completed.returncode}"
+
+
+def calibration_check(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
+    expected_paths = tuple(
+        project_root / relative_path for relative_path in FROZEN_CALIBRATION_FILES
+    )
+    missing = [str(path) for path in expected_paths if not path.is_file()]
+    if missing:
+        return result("calibration_bundle", False, f"missing={missing}")
+
+    manifest_path = expected_paths[0]
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        artifacts = manifest["artifacts"]
+        expected_artifacts = {
+            "kinematic_calibration": expected_paths[1],
+            "table_to_robot": expected_paths[2],
+            "gui_a4_homography": expected_paths[3],
+            "park_pose": expected_paths[4],
+        }
+        mismatches = []
+        for artifact_name, expected_path in expected_artifacts.items():
+            artifact = artifacts[artifact_name]
+            expected_relative = str(expected_path.relative_to(project_root))
+            if artifact.get("file") != expected_relative:
+                mismatches.append(f"{artifact_name}:file={artifact.get('file')!r}")
+            if artifact.get("sha256") != sha256_file(expected_path):
+                mismatches.append(f"{artifact_name}:sha256 mismatch")
+        if artifacts["kinematic_calibration"].get("status") != "accepted":
+            mismatches.append("kinematic_calibration:status is not accepted")
+    except (KeyError, OSError, TypeError, json.JSONDecodeError) as exception:
+        return result("calibration_bundle", False, f"invalid manifest: {exception}")
+    return result(
+        "calibration_bundle",
+        not mismatches,
+        "ok" if not mismatches else "; ".join(mismatches),
+    )
+
+
+def parameter_registry_checks(
+    project_root: Path = PROJECT_ROOT,
+) -> list[dict[str, Any]]:
+    registry_path = project_root / "configs/parameter_registry.yaml"
+    if not registry_path.is_file():
+        return [result("inspection_parameters", False, f"missing={registry_path}")]
+    registry_text = registry_path.read_text(encoding="utf-8")
+    inspection_requirements = (
+        'type: "so101_follower_5d"',
+        'port: "/dev/epuzzle-arm"',
+        'kinematic_calibration_status: "accepted"',
+        'device: "/dev/epuzzle-camera"',
+        "camera_image_size_px: [1280, 720]",
+        "z_safe_mm: 60.0",
+        "z_pregrasp_mm: 20.0",
+        "global_timeout_s: 120",
+        "max_vision_age_ms: 30000",
+        "park_tolerance_deg: 4.0",
+        "park_follow_tolerance_deg: 8.0",
+        "automatic_pick_place_enabled: false",
+    )
+    missing = [
+        requirement
+        for requirement in inspection_requirements
+        if requirement not in registry_text
+    ]
+    unknown_count = registry_text.count('"UNKNOWN"')
+    return [
+        result(
+            "inspection_parameters",
+            not missing,
+            "magnet-off inspection parameters frozen"
+            if not missing
+            else f"missing={missing}",
+        ),
+        result(
+            "deferred_unknown_parameters",
+            unknown_count == 0,
+            f"UNKNOWN count={unknown_count}; deferred features remain gated",
+            severity="warning",
+        ),
+    ]
+
+
+def motion_lock_check(environment: dict[str, str]) -> dict[str, Any]:
+    lock_path = Path(
+        environment.get(
+            "EPUZZLE_ROBOT_MOTION_LOCK",
+            "/etc/epuzzle/robot-motion.lock.json",
+        )
+    )
+    if not lock_path.exists():
+        return result("robot_motion_lock", True, f"absent={lock_path}")
+    try:
+        payload = json.loads(lock_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exception:
+        return result(
+            "robot_motion_lock",
+            False,
+            f"present and invalid={lock_path}: {exception}",
+        )
+    reason = payload.get("reason") if isinstance(payload, dict) else None
+    return result(
+        "robot_motion_lock",
+        False,
+        f"LOCKED: {reason or lock_path}",
+    )
+
+
+def hardware_checks() -> list[dict[str, Any]]:
+    environment = load_environment()
+    checks: list[dict[str, Any]] = []
+    model_path = Path("/proc/device-tree/model")
+    model = (
+        model_path.read_bytes().rstrip(b"\0").decode(errors="replace")
+        if model_path.exists()
+        else "UNKNOWN"
+    )
+    checks.append(result("board", "Raspberry Pi 5" in model, model))
+
+    memory_gib = read_total_memory_gib()
+    checks.append(result("memory", memory_gib >= 7.0, f"{memory_gib:.2f} GiB"))
+    throttled = command_output(["vcgencmd", "get_throttled"])
+    checks.append(result("power_throttling", throttled.endswith("0x0"), throttled))
+
+    thermal_path = Path("/sys/class/thermal/thermal_zone0/temp")
+    temperature_c = (
+        float(thermal_path.read_text().strip()) / 1000
+        if thermal_path.exists()
+        else 999.0
+    )
+    checks.append(result("temperature", temperature_c < 75.0, f"{temperature_c:.1f} C"))
+
+    robot_port = Path(environment.get("EPUZZLE_ROBOT_PORT", "/dev/epuzzle-arm"))
+    camera_device = Path(
+        environment.get("EPUZZLE_CAMERA_DEVICE", "/dev/epuzzle-camera")
+    )
+    checks.append(result("robot_port", robot_port.exists(), str(robot_port)))
+    checks.append(result("camera_device", camera_device.exists(), str(camera_device)))
+    checks.append(motion_lock_check(environment))
+
+    magnet_line = environment.get("EPUZZLE_MAGNET_GPIO_LINE", "UNKNOWN")
+    magnet_active_high = environment.get("EPUZZLE_MAGNET_ACTIVE_HIGH", "UNKNOWN")
+    magnet_timeout = environment.get("EPUZZLE_MAGNET_MAX_ON_SECONDS", "UNKNOWN")
+    checks.append(result("magnet_gpio_frozen", magnet_line == "17", magnet_line))
+    checks.append(
+        result("magnet_relay_active_low", magnet_active_high == "0", magnet_active_high)
+    )
+    checks.append(result("magnet_timeout", magnet_timeout == "10", magnet_timeout))
+    checks.append(calibration_check())
+    checks.extend(parameter_registry_checks())
+    return checks
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--software-only", action="store_true")
+    parser.add_argument("--json", action="store_true")
+    arguments = parser.parse_args()
+
+    environment = load_environment()
+    checks = software_checks()
+    checks.extend(feature_gate_checks(environment))
+    if not arguments.software_only:
+        checks.extend(hardware_checks())
+    passed = all(check["passed"] or check["severity"] != "error" for check in checks)
+    report = {
+        "passed": passed,
+        "mode": "software" if arguments.software_only else "full",
+        "checks": checks,
+    }
+    if arguments.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        for check in checks:
+            if check["passed"]:
+                state = "PASS"
+            elif check["severity"] == "warning":
+                state = "WARN"
+            else:
+                state = "FAIL"
+            print(f"[{state}] {check['name']}: {check['detail']}")
+        print("READY" if passed else "NOT_READY")
+    return 0 if passed else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "timestamp_local": "2026-07-31T11:42",
+  "robot_type": "so101_follower_5d",
+  "source_arm": "so101_follower_modified_single_arm",
+  "measurement_status": "provisional",
+  "instrument": {
+    "type": "digital_caliper",
+    "model": "UNKNOWN",
+    "accuracy_mm": "UNKNOWN"
+  },
+  "magnet_extension": {
+    "frame": "j5_tool_axis",
+    "unit": "mm",
+    "reference_start": "J5 rotating output / mounting plane",
+    "reference_end": "electromagnet working contact face",
+    "readings": [
+      40.17
+    ],
+    "reading_count": 1,
+    "repeatability_mm": "UNKNOWN"
+  },
+  "wrist_roll_coaxial_observation": {
+    "method": "with torque disabled, hold J4 housing and rotate J5 by hand",
+    "result": "electromagnet rotates approximately about its own center",
+    "measured_eccentricity_mm": "UNKNOWN",
+    "classification": "qualitative_observation"
+  },
+  "images": [
+    {
+      "file": "side_caliper_40.17mm.jpg",
+      "sha256": "0a45f83a832a713d22e27c2beedd53370adc9566dd616a32230a4ab12cf8ec40"
+    },
+    {
+      "file": "front_coaxial_view.jpg",
+      "sha256": "19888dd6029346781a0b382b58e63463648ad0d4e12f82f91822337b888bbba3"
+    }
+  ],
+  "provisional_planar_geometry_mm": {
+    "historical_urdf_wrist_forward": 61.1,
+    "historical_urdf_wrist_normal": 18.1,
+    "measured_magnet_extension": 40.17,
+    "derived_tool_forward": 101.27,
+    "derived_tool_normal": 18.1,
+    "urdf_source_sha256": "UNKNOWN",
+    "note": "Derived values are engineering inputs for contact fitting, not accepted measurements as a whole."
+  },
+  "motion_unlock_allowed": false
+}

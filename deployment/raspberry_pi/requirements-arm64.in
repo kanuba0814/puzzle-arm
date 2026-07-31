@@ -1,0 +1,11 @@
+# Raspberry Pi OS Trixie / CPython 3.13 / arm64
+# LeRobot 0.6.0 的关键版本按项目契约冻结。
+lerobot_robot_so101_5d==0.2.0
+lerobot[feetech]==0.6.0
+torch==2.7.1
+torchvision==0.22.1
+numpy==2.2.6
+opencv-python-headless==4.13.0.90
+# GUI 用 pygame 离屏绘图，再将 RGB565 直接写入 /dev/fb0。
+pygame-ce==2.5.5
+feetech-servo-sdk==1.0.0

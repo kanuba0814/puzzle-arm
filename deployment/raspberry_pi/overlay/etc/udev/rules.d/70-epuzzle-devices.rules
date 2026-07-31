@@ -1,0 +1,5 @@
+# 单台原 SO-101 follower 改装臂控制板；2026-07-31 实机 udev 属性冻结。
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d3", ATTRS{serial}=="5AB9067408", SYMLINK+="epuzzle-arm", GROUP="dialout", MODE="0660"
+
+# Sipeed MaixCAM UVC capture 节点；index 1 是 metadata，禁止误绑。
+SUBSYSTEM=="video4linux", ATTRS{idVendor}=="359f", ATTRS{idProduct}=="2120", ATTRS{serial}=="c9c28f4513595968", ATTR{index}=="0", SYMLINK+="epuzzle-camera", GROUP="video", MODE="0660"

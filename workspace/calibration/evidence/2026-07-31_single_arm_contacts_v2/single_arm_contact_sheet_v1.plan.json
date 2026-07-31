@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "fixture_id": "single-arm-contact-sheet-v1",
+  "frame": "calibration_sheet_mm",
+  "page": {
+    "format": "A4 portrait",
+    "width_mm": 210.0,
+    "height_mm": 297.0,
+    "origin": "bottom_left",
+    "construction_methods": [
+      "print PDF at 100 percent and verify 100 mm scale",
+      "hand draw from bottom-left origin and verify listed dimensions"
+    ],
+    "print_scale_percent": 100,
+    "scale_check_length_mm": 100.0
+  },
+  "tcp_alignment": {
+    "electromagnet_outer_diameter_mm": 20.0,
+    "exact_circle_diameter_mm": 20.0,
+    "outer_guide_diameter_mm": 26.0,
+    "manual_alignment_square_side_mm": 20.0,
+    "contact_surface_z_mm": 0.0,
+    "working_face_orientation": "flat_on_sheet",
+    "magnet_activation_allowed": false
+  },
+  "targets": [
+    {"label": "A", "role": "fit", "position_mm": [35.0, 250.0, 0.0]},
+    {"label": "B", "role": "fit", "position_mm": [105.0, 250.0, 0.0]},
+    {"label": "D", "role": "fit", "position_mm": [175.0, 250.0, 0.0]},
+    {"label": "E", "role": "fit", "position_mm": [35.0, 170.0, 0.0]},
+    {"label": "F", "role": "fit", "position_mm": [105.0, 170.0, 0.0]},
+    {"label": "G", "role": "fit", "position_mm": [175.0, 170.0, 0.0]},
+    {"label": "H", "role": "fit", "position_mm": [35.0, 80.0, 0.0]},
+    {"label": "I", "role": "fit", "position_mm": [105.0, 80.0, 0.0]},
+    {"label": "M", "role": "holdout", "position_mm": [70.0, 210.0, 0.0]},
+    {"label": "N", "role": "holdout", "position_mm": [140.0, 210.0, 0.0]},
+    {"label": "O", "role": "holdout", "position_mm": [70.0, 120.0, 0.0]},
+    {"label": "P", "role": "holdout", "position_mm": [140.0, 120.0, 0.0]}
+  ]
+}

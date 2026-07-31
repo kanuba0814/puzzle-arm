@@ -1,0 +1,74 @@
+计划: /opt/epuzzle/workspace/calibration/fixtures/single_arm_contact_sheet_v1.plan.json (4dde6b01477ffe87f308f8441a18220661d92f5e128f00b237e8b24efd1dd36f)
+输出: /home/epuzzle/calibration/single_arm_contacts_20260731.json
+目标数: 12；固定五轴: shoulder_pan, shoulder_lift, elbow_flex, wrist_flex, wrist_roll
+只读 Present_Position；不发送 Goal_Position；不控制电磁铁。
+确认磁铁已断电、机械臂由人在旁托住、触点纸关键尺寸已复核。
+输入 CAPTURE-CONTACTS-MAGNET-OFF 才连接: CAPTURE-CONTACTS-MAGNET-OFF
+
+[A / fit] 将磁铁工作面平放，使 20 mm 外缘对准圆或与方框四边中点相切；目标 [35.0, 250.0, 0.0]；保持不动后按 Enter 采样 >>> 
+raw median: {'shoulder_pan': 1510, 'shoulder_lift': 2160, 'elbow_flex': 2950, 'wrist_flex': 2092, 'wrist_roll': 1110}
+joint_deg: shoulder_pan=-56.9231, shoulder_lift=16.4396, elbow_flex=68.7912, wrist_flex=15.9121, wrist_roll=-82.4176
+保存该点? [y=保存/r=重采/q=安全中止] y
+
+[B / fit] 将磁铁工作面平放，使 20 mm 外缘对准圆或与方框四边中点相切；目标 [105.0, 250.0, 0.0]；保持不动后按 Enter 采样 >>> 
+raw median: {'shoulder_pan': 1707, 'shoulder_lift': 2332, 'elbow_flex': 2587, 'wrist_flex': 2270, 'wrist_roll': 1116}
+joint_deg: shoulder_pan=-39.6044, shoulder_lift=31.5604, elbow_flex=36.8791, wrist_flex=31.5604, wrist_roll=-81.8901
+保存该点? [y=保存/r=重采/q=安全中止] y
+
+[D / fit] 将磁铁工作面平放，使 20 mm 外缘对准圆或与方框四边中点相切；目标 [175.0, 250.0, 0.0]；保持不动后按 Enter 采样 >>> 
+raw median: {'shoulder_pan': 1815, 'shoulder_lift': 2567, 'elbow_flex': 2074, 'wrist_flex': 2551, 'wrist_roll': 1116}
+joint_deg: shoulder_pan=-30.1099, shoulder_lift=52.2198, elbow_flex=-8.2198, wrist_flex=56.2637, wrist_roll=-81.8901
+保存该点? [y=保存/r=重采/q=安全中止] y
+
+[E / fit] 将磁铁工作面平放，使 20 mm 外缘对准圆或与方框四边中点相切；目标 [35.0, 170.0, 0.0]；保持不动后按 Enter 采样 >>> 
+raw median: {'shoulder_pan': 1898, 'shoulder_lift': 2135, 'elbow_flex': 3170, 'wrist_flex': 1914, 'wrist_roll': 1113}
+joint_deg: shoulder_pan=-22.8132, shoulder_lift=14.2418, elbow_flex=88.1319, wrist_flex=0.2637, wrist_roll=-82.1538
+保存该点? [y=保存/r=重采/q=安全中止] y
+
+[F / fit] 将磁铁工作面平放，使 20 mm 外缘对准圆或与方框四边中点相切；目标 [105.0, 170.0, 0.0]；保持不动后按 Enter 采样 >>> 
+raw median: {'shoulder_pan': 1898, 'shoulder_lift': 2135, 'elbow_flex': 3170, 'wrist_flex': 1914, 'wrist_roll': 1113}
+joint_deg: shoulder_pan=-22.8132, shoulder_lift=14.2418, elbow_flex=88.1319, wrist_flex=0.2637, wrist_roll=-82.1538
+保存该点? [y=保存/r=重采/q=安全中止] r
+
+[F / fit] 将磁铁工作面平放，使 20 mm 外缘对准圆或与方框四边中点相切；目标 [105.0, 170.0, 0.0]；保持不动后按 Enter 采样 >>> 
+raw median: {'shoulder_pan': 1985, 'shoulder_lift': 2235, 'elbow_flex': 2787, 'wrist_flex': 2193, 'wrist_roll': 1113}
+joint_deg: shoulder_pan=-15.1648, shoulder_lift=23.0330, elbow_flex=54.4615, wrist_flex=24.7912, wrist_roll=-82.1538
+保存该点? [y=保存/r=重采/q=安全中止] y
+
+[G / fit] 将磁铁工作面平放，使 20 mm 外缘对准圆或与方框四边中点相切；目标 [175.0, 170.0, 0.0]；保持不动后按 Enter 采样 >>> 
+raw median: {'shoulder_pan': 2036, 'shoulder_lift': 2450, 'elbow_flex': 2351, 'wrist_flex': 2373, 'wrist_roll': 1109}
+joint_deg: shoulder_pan=-10.6813, shoulder_lift=41.9341, elbow_flex=16.1319, wrist_flex=40.6154, wrist_roll=-82.5055
+保存该点? [y=保存/r=重采/q=安全中止] y
+
+[H / fit] 将磁铁工作面平放，使 20 mm 外缘对准圆或与方框四边中点相切；目标 [35.0, 80.0, 0.0]；保持不动后按 Enter 采样 >>> 
+raw median: {'shoulder_pan': 2548, 'shoulder_lift': 2127, 'elbow_flex': 3088, 'wrist_flex': 1997, 'wrist_roll': 1114}
+joint_deg: shoulder_pan=34.3297, shoulder_lift=13.5385, elbow_flex=80.9231, wrist_flex=7.5604, wrist_roll=-82.0659
+保存该点? [y=保存/r=重采/q=安全中止] y
+
+[I / fit] 将磁铁工作面平放，使 20 mm 外缘对准圆或与方框四边中点相切；目标 [105.0, 80.0, 0.0]；保持不动后按 Enter 采样 >>> 
+raw median: {'shoulder_pan': 2380, 'shoulder_lift': 2247, 'elbow_flex': 2730, 'wrist_flex': 2218, 'wrist_roll': 1112}
+joint_deg: shoulder_pan=19.5604, shoulder_lift=24.0879, elbow_flex=49.4505, wrist_flex=26.9890, wrist_roll=-82.2418
+保存该点? [y=保存/r=重采/q=安全中止] y
+
+[M / holdout] 将磁铁工作面平放，使 20 mm 外缘对准圆或与方框四边中点相切；目标 [70.0, 210.0, 0.0]；保持不动后按 Enter 采样 >>> 
+raw median: {'shoulder_pan': 1765, 'shoulder_lift': 2177, 'elbow_flex': 2923, 'wrist_flex': 2121, 'wrist_roll': 1109}
+joint_deg: shoulder_pan=-34.5055, shoulder_lift=17.9341, elbow_flex=66.4176, wrist_flex=18.4615, wrist_roll=-82.5055
+保存该点? [y=保存/r=重采/q=安全中止] y
+
+[N / holdout] 将磁铁工作面平放，使 20 mm 外缘对准圆或与方框四边中点相切；目标 [140.0, 210.0, 0.0]；保持不动后按 Enter 采样 >>> 
+raw median: {'shoulder_pan': 1878, 'shoulder_lift': 2360, 'elbow_flex': 2529, 'wrist_flex': 2302, 'wrist_roll': 1115}
+joint_deg: shoulder_pan=-24.5714, shoulder_lift=34.0220, elbow_flex=31.7802, wrist_flex=34.3736, wrist_roll=-81.9780
+保存该点? [y=保存/r=重采/q=安全中止] y
+
+[O / holdout] 将磁铁工作面平放，使 20 mm 外缘对准圆或与方框四边中点相切；目标 [70.0, 120.0, 0.0]；保持不动后按 Enter 采样 >>> 
+raw median: {'shoulder_pan': 2263, 'shoulder_lift': 2154, 'elbow_flex': 3009, 'wrist_flex': 2032, 'wrist_roll': 1110}
+joint_deg: shoulder_pan=9.2747, shoulder_lift=15.9121, elbow_flex=73.9780, wrist_flex=10.6374, wrist_roll=-82.4176
+保存该点? [y=保存/r=重采/q=安全中止] y
+
+[P / holdout] 将磁铁工作面平放，使 20 mm 外缘对准圆或与方框四边中点相切；目标 [140.0, 120.0, 0.0]；保持不动后按 Enter 采样 >>> 
+raw median: {'shoulder_pan': 2194, 'shoulder_lift': 2333, 'elbow_flex': 2580, 'wrist_flex': 2290, 'wrist_roll': 1115}
+joint_deg: shoulder_pan=3.2088, shoulder_lift=31.6484, elbow_flex=36.2637, wrist_flex=33.3187, wrist_roll=-81.9780
+保存该点? [y=保存/r=重采/q=安全中止] y
+采点完成: /home/epuzzle/calibration/single_arm_contacts_20260731.json
+SHA256: 11bf8221865f96242963d58e5af839eb78249ed481c7e0ca829abb5cabb433d4
+舵机保持断力矩；数据尚未拟合或通过 holdout，不能解锁运动。

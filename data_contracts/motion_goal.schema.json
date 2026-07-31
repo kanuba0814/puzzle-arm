@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MotionGoal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "goal_id",
+    "timestamp_ns",
+    "frame",
+    "position_mm",
+    "pitch_deg",
+    "yaw_deg",
+    "phase",
+    "speed_profile"
+  ],
+  "properties": {
+    "goal_id": {
+      "type": "string"
+    },
+    "timestamp_ns": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "time.monotonic_ns() clock domain; not Unix wall-clock time"
+    },
+    "frame": {
+      "const": "robot_base_mm"
+    },
+    "position_mm": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "items": false,
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "pitch_deg": {
+      "type": "number"
+    },
+    "yaw_deg": {
+      "type": "number"
+    },
+    "phase": {
+      "enum": [
+        "HOME",
+        "SAFE",
+        "PREGRASP",
+        "PICK",
+        "PREPLACE",
+        "PLACE",
+        "RECOVERY"
+      ]
+    },
+    "speed_profile": {
+      "enum": [
+        "EMPTY_NORMAL",
+        "EMPTY_SLOW",
+        "HOLDING_SLOW",
+        "LOCAL_POLICY"
+      ]
+    },
+    "deadline_ns": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Absolute time.monotonic_ns() deadline in the same clock domain as timestamp_ns"
+    }
+  }
+}

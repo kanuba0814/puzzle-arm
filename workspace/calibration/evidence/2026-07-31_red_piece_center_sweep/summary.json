@@ -1,0 +1,16 @@
+{
+  "repeat_piece_id": 0,
+  "repetition_count": 2,
+  "repeat_joint_max_abs_delta_deg": 0.263736,
+  "repeat_fk_xy_delta_mm": 1.104762,
+  "repeat_fk_xyz_delta_mm": 1.223582,
+  "swept_piece_ids": [
+    0,
+    3,
+    2,
+    1
+  ],
+  "result": "PASS",
+  "magnet_enabled": false,
+  "torque_disabled_after_test": true
+}

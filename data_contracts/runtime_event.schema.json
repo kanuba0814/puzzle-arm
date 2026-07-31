@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RuntimeEvent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "timestamp_ns",
+    "state",
+    "event",
+    "severity"
+  ],
+  "properties": {
+    "timestamp_ns": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "state": {
+      "type": "string"
+    },
+    "event": {
+      "type": "string"
+    },
+    "severity": {
+      "enum": [
+        "DEBUG",
+        "INFO",
+        "WARNING",
+        "ERROR",
+        "FATAL"
+      ]
+    },
+    "piece_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "error_code": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "payload": {
+      "type": "object"
+    }
+  }
+}

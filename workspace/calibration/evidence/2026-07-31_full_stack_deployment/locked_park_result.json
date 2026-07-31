@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "command": "park",
+  "result": "FAIL",
+  "magnet_enabled": false,
+  "message": "机械臂运动安全锁: 2026-07-31 xHCI host controller xhci-hcd.1 died during bumpless inspection connection; final PARK and torque-off could not be confirmed",
+  "started_at_ns": 6507690944297,
+  "duration_s": 0.0,
+  "events": [
+    {
+      "error_code": "SUPERVISOR_LOCKED",
+      "route": [],
+      "final_state": "FAILED",
+      "events_path": "workspace/logs/supervisor/park.jsonl"
+    }
+  ],
+  "success": false,
+  "error_code": "SUPERVISOR_LOCKED",
+  "mode": "park",
+  "route": [],
+  "duration_ms": 0,
+  "final_state": "FAILED",
+  "events_path": "workspace/logs/supervisor/park.jsonl"
+}

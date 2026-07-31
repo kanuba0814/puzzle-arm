@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-07-31 14:29:44",
+  "mode": "gui-local-single-plane",
+  "camera": "/dev/video0",
+  "image_size": [
+    1280,
+    720
+  ],
+  "corners": 57,
+  "homography_residual_mm": {
+    "rms": 0.25754064651680514,
+    "max": 1.0298622685895824
+  },
+  "world_frame": "origin=A4左下角, x右0-210, y上0-297"
+}

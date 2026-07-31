@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Pick/Place Contact Height Calibration",
+  "description": "验收文件：PICK 和 PLACE 接触高度标定结果",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "calibration_id",
+    "date",
+    "reference_frame",
+    "quality",
+    "contact_heights_mm",
+    "magnet_verification",
+    "single_piece_success_rate",
+    "total_test_cycles"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "calibration_id": {
+      "type": "string",
+      "description": "标定唯一标识符"
+    },
+    "date": {
+      "type": "string",
+      "format": "date",
+      "description": "标定日期 YYYY-MM-DD"
+    },
+    "reference_frame": {
+      "type": "string",
+      "enum": ["calibration_sheet_mm"],
+      "description": "参考坐标系"
+    },
+    "test_procedure": {
+      "type": "string",
+      "description": "测试流程描述"
+    },
+    "quality": {
+      "type": "object",
+      "required": ["status", "reason"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["pending", "accepted", "rejected"],
+          "description": "验收状态"
+        },
+        "reason": {
+          "type": "string",
+          "description": "验收原因或结果说明"
+        },
+        "reviewer": {
+          "type": ["string", "null"],
+          "description": "审核人"
+        },
+        "review_date": {
+          "type": ["string", "null"],
+          "format": "date",
+          "description": "审核日期"
+        }
+      }
+    },
+    "contact_heights_mm": {
+      "type": "object",
+      "required": ["pick", "place"],
+      "properties": {
+        "pick": {
+          "type": ["number", "null"],
+          "description": "PICK 接触高度（mm），相对于 calibration_sheet_mm"
+        },
+        "place": {
+          "type": ["number", "null"],
+          "description": "PLACE 接触高度（mm），相对于 calibration_sheet_mm"
+        },
+        "pick_source": {
+          "type": "string",
+          "description": "PICK 高度来源"
+        },
+        "place_source": {
+          "type": "string",
+          "description": "PLACE 高度来源"
+        }
+      }
+    },
+    "magnet_verification": {
+      "type": "object",
+      "required": [
+        "pickup_tested",
+        "release_tested",
+        "pickup_success_count",
+        "pickup_failure_count",
+        "release_success_count",
+        "release_failure_count"
+      ],
+      "properties": {
+        "pickup_tested": {
+          "type": "boolean",
+          "description": "是否已测试吸附"
+        },
+        "release_tested": {
+          "type": "boolean",
+          "description": "是否已测试释放"
+        },
+        "effective_gap_mm": {
+          "type": ["number", "null"],
+          "description": "有效吸附间隙（mm）"
+        },
+        "test_mass_g": {
+          "type": ["number", "null"],
+          "description": "测试质量（g）"
+        },
+        "pickup_success_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "吸附成功次数"
+        },
+        "pickup_failure_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "吸附失败次数"
+        },
+        "release_success_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "释放成功次数"
+        },
+        "release_failure_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "释放失败次数"
+        }
+      }
+    },
+    "single_piece_success_rate": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "单片成功率（0.0-1.0），需 >= 0.8 才能验收"
+    },
+    "total_test_cycles": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "总测试循环次数"
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "标定备注"
+    },
+    "test_evidence": {
+      "type": "object",
+      "properties": {
+        "video_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "测试视频路径"
+        },
+        "measurement_log": {
+          "type": ["string", "null"],
+          "description": "测量日志路径"
+        },
+        "operator_notes": {
+          "type": "string",
+          "description": "操作者备注"
+        }
+      }
+    }
+  }
+}

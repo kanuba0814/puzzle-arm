@@ -1,0 +1,35 @@
+{"success": true, "error_code": "NONE", "message": "新鲜相机检测完成：4 个碎片", "mode": "scan", "route": ["red-0", "red-1", "red-2", "red-3"], "duration_ms": 2240, "final_state": "SCAN", "events_path": "workspace/logs/supervisor/detect.jsonl"}
+{
+  "schema_version": 1,
+  "command": "detect",
+  "result": "PASS",
+  "magnet_enabled": false,
+  "message": "新鲜相机检测完成：4 个碎片",
+  "started_at_ns": 2833405418268,
+  "duration_s": 2.24,
+  "events": [
+    {
+      "error_code": "NONE",
+      "route": [
+        "red-0",
+        "red-1",
+        "red-2",
+        "red-3"
+      ],
+      "final_state": "SCAN",
+      "events_path": "workspace/logs/supervisor/detect.jsonl"
+    }
+  ],
+  "success": true,
+  "error_code": "NONE",
+  "mode": "scan",
+  "route": [
+    "red-0",
+    "red-1",
+    "red-2",
+    "red-3"
+  ],
+  "duration_ms": 2240,
+  "final_state": "SCAN",
+  "events_path": "workspace/logs/supervisor/detect.jsonl"
+}

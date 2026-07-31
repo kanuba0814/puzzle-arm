@@ -1,0 +1,228 @@
+{
+  "passed": false,
+  "mode": "full",
+  "checks": [
+    {
+      "name": "architecture",
+      "passed": true,
+      "detail": "aarch64",
+      "severity": "error"
+    },
+    {
+      "name": "python",
+      "passed": true,
+      "detail": "3.13.5",
+      "severity": "error"
+    },
+    {
+      "name": "package:lerobot",
+      "passed": true,
+      "detail": "expected=0.6.0, actual=0.6.0",
+      "severity": "error"
+    },
+    {
+      "name": "package:torch",
+      "passed": true,
+      "detail": "expected=2.7.1, actual=2.7.1",
+      "severity": "error"
+    },
+    {
+      "name": "package:torchvision",
+      "passed": true,
+      "detail": "expected=0.22.1, actual=0.22.1",
+      "severity": "error"
+    },
+    {
+      "name": "package:numpy",
+      "passed": true,
+      "detail": "expected=2.2.6, actual=2.2.6",
+      "severity": "error"
+    },
+    {
+      "name": "package:opencv-python-headless",
+      "passed": true,
+      "detail": "expected=4.13.0.90, actual=4.13.0.90",
+      "severity": "error"
+    },
+    {
+      "name": "package:feetech-servo-sdk",
+      "passed": true,
+      "detail": "expected=1.0.0, actual=1.0.0",
+      "severity": "error"
+    },
+    {
+      "name": "package:lerobot_robot_so101_5d",
+      "passed": true,
+      "detail": "expected=0.2.0, actual=0.2.0",
+      "severity": "error"
+    },
+    {
+      "name": "package:pygame-runtime",
+      "passed": true,
+      "detail": "pygame-ce=NOT_INSTALLED; pygame=2.6.1",
+      "severity": "error"
+    },
+    {
+      "name": "import:numpy",
+      "passed": true,
+      "detail": "/opt/epuzzle/venv/lib/python3.13/site-packages/numpy/__init__.py",
+      "severity": "error"
+    },
+    {
+      "name": "import:cv2",
+      "passed": true,
+      "detail": "/opt/epuzzle/venv/lib/python3.13/site-packages/cv2/__init__.py",
+      "severity": "error"
+    },
+    {
+      "name": "import:pygame",
+      "passed": true,
+      "detail": "/usr/lib/python3/dist-packages/pygame/__init__.py",
+      "severity": "error"
+    },
+    {
+      "name": "import:torch",
+      "passed": true,
+      "detail": "/opt/epuzzle/venv/lib/python3.13/site-packages/torch/__init__.py",
+      "severity": "error"
+    },
+    {
+      "name": "import:torchvision",
+      "passed": true,
+      "detail": "/opt/epuzzle/venv/lib/python3.13/site-packages/torchvision/__init__.py",
+      "severity": "error"
+    },
+    {
+      "name": "import:lerobot",
+      "passed": true,
+      "detail": "/opt/epuzzle/venv/lib/python3.13/site-packages/lerobot/__init__.py",
+      "severity": "error"
+    },
+    {
+      "name": "import:scservo_sdk",
+      "passed": true,
+      "detail": "/opt/epuzzle/venv/lib/python3.13/site-packages/scservo_sdk/__init__.py",
+      "severity": "error"
+    },
+    {
+      "name": "import:lerobot_robot_so101_5d",
+      "passed": true,
+      "detail": "/opt/epuzzle/workspace/src/robot_plugin/lerobot_robot_so101_5d/lerobot_robot_so101_5d/__init__.py",
+      "severity": "error"
+    },
+    {
+      "name": "five_axis_feature_contract",
+      "passed": true,
+      "detail": "('shoulder_pan.pos', 'shoulder_lift.pos', 'elbow_flex.pos', 'wrist_flex.pos', 'wrist_roll.pos')",
+      "severity": "error"
+    },
+    {
+      "name": "bumpless_connect_contract",
+      "passed": true,
+      "detail": "SO101Follower5D.connect_bumpless=True",
+      "severity": "error"
+    },
+    {
+      "name": "feature_gate:EPUZZLE_ACT_ENABLED",
+      "passed": true,
+      "detail": "environment=0; registry matched; expected act_enabled: false",
+      "severity": "error"
+    },
+    {
+      "name": "feature_gate:EPUZZLE_GENERIC_VISION_ENABLED",
+      "passed": true,
+      "detail": "environment=0; registry matched; expected generic_vision_enabled: false",
+      "severity": "error"
+    },
+    {
+      "name": "feature_gate:EPUZZLE_TEXTURE_ENABLED",
+      "passed": true,
+      "detail": "environment=0; registry matched; expected texture_enabled: false",
+      "severity": "error"
+    },
+    {
+      "name": "feature_gate:EPUZZLE_MAGNET_ENABLED",
+      "passed": true,
+      "detail": "environment=1; registry matched; expected magnet_enabled: true",
+      "severity": "error"
+    },
+    {
+      "name": "feature_gate:automatic_pick_place",
+      "passed": true,
+      "detail": "registry matched; automatic PICK/PLACE must remain false",
+      "severity": "error"
+    },
+    {
+      "name": "board",
+      "passed": true,
+      "detail": "Raspberry Pi 5 Model B Rev 1.0",
+      "severity": "error"
+    },
+    {
+      "name": "memory",
+      "passed": true,
+      "detail": "7.87 GiB",
+      "severity": "error"
+    },
+    {
+      "name": "power_throttling",
+      "passed": true,
+      "detail": "throttled=0x0",
+      "severity": "error"
+    },
+    {
+      "name": "temperature",
+      "passed": true,
+      "detail": "51.8 C",
+      "severity": "error"
+    },
+    {
+      "name": "robot_port",
+      "passed": false,
+      "detail": "/dev/epuzzle-arm",
+      "severity": "error"
+    },
+    {
+      "name": "camera_device",
+      "passed": false,
+      "detail": "/dev/epuzzle-camera",
+      "severity": "error"
+    },
+    {
+      "name": "robot_motion_lock",
+      "passed": false,
+      "detail": "LOCKED: 2026-07-31 xHCI host controller xhci-hcd.1 died during bumpless inspection connection; final PARK and torque-off could not be confirmed",
+      "severity": "error"
+    },
+    {
+      "name": "magnet_gpio_frozen",
+      "passed": true,
+      "detail": "17",
+      "severity": "error"
+    },
+    {
+      "name": "magnet_relay_active_low",
+      "passed": true,
+      "detail": "0",
+      "severity": "error"
+    },
+    {
+      "name": "magnet_timeout",
+      "passed": true,
+      "detail": "10",
+      "severity": "error"
+    },
+    {
+      "name": "calibration_bundle",
+      "passed": true,
+      "detail": "ok",
+      "severity": "error"
+    },
+    {
+      "name": "parameters_frozen",
+      "passed": false,
+      "detail": "UNKNOWN count=41",
+      "severity": "error"
+    }
+  ]
+}

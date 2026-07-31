@@ -1,0 +1,190 @@
+---
+meta:
+  schema_version: 1
+  rule: "UNKNOWN values must be measured before formal run"
+
+versions:
+  lerobot: "0.6.0"
+  lerobot_commit: "30da8e687a6dfc617fcd94afc367ac7071c376ce"
+  opencv: "UNKNOWN"
+  python: "UNKNOWN"
+  pytorch: "UNKNOWN"
+
+robot:
+  type: "so101_follower_5d"
+  topology: "single_arm"
+  source_arm: "so101_follower_modified_single_arm"
+  controller_usb_id: "1a86:55d3"
+  controller_usb_serial: "5AB9067408"
+  port: "/dev/epuzzle-arm"
+  port_by_id: "/dev/serial/by-id/usb-1a86_USB_Single_Serial_5AB9067408-if00"
+  joint_feature_order:
+    - shoulder_pan.pos
+    - shoulder_lift.pos
+    - elbow_flex.pos
+    - wrist_flex.pos
+    - wrist_roll.pos
+  servo_label_each_joint: "UNKNOWN"
+  servo_supply_v: "UNKNOWN"
+  control_period_ms: "UNKNOWN"
+  motor_calibration_runtime_file: >-
+    /home/epuzzle/.cache/huggingface/lerobot/calibration/robots/
+    so101_follower_5d/epuzzle-single-arm.json
+  motor_calibration_sha256: >-
+    89ea5079eb9bb35012866d736d0438d419ee57c201e51e11a61530e3e6440ca8
+  kinematic_calibration_file: >-
+    workspace/calibration/arm_kinematics_single_arm_accepted_20260731.json
+  kinematic_calibration_sha256: >-
+    c207bae180e187b6c639cc848320195dafce1f468920a0f2eba7f00c621eab38
+  kinematic_calibration_status: "accepted"
+  runtime_calibration_manifest_file: >-
+    workspace/calibration/runtime_calibration_manifest_20260731.json
+  runtime_calibration_manifest_sha256: >-
+    a77d82d3f77526b1a6ef4ebd5b4b5028225c13654339f55250795f884f14fbd6
+  park_pose_file: "workspace/calibration/park_pose_single_arm_20260731.json"
+  park_pose_sha256: >-
+    1c14bd574e0a1976d8ae5e7b303aecdcd4ec3a08aeefefc2531f82eaf00276d9
+  joint_soft_limits_deg:
+    - [-110.0, 110.0]
+    - [-100.0, 100.0]
+    - [-90.0, 90.0]
+    - [-95.0, 95.0]
+    - [-145.0, -20.0]
+  joint_soft_limits_source: >-
+    same-arm calibrated motor endpoints with conservative margins;
+    J5 additionally limited for cable twist; not a self-collision map
+
+camera:
+  model: "Sipeed MaixCAM UVC"
+  usb_id: "359f:2120"
+  usb_serial: "c9c28f4513595968"
+  device: "/dev/epuzzle-camera"
+  capture_device_at_acceptance: "/dev/video0"
+  width: 1280
+  height: 720
+  fps: "UNKNOWN"
+  exposure: "UNKNOWN"
+  gain: "UNKNOWN"
+  white_balance: "UNKNOWN"
+  autofocus: false
+
+frames:
+  table_origin_definition: "A4 bottom-left; x right 0-210 mm; y up 0-297 mm"
+  table_homography_file: >-
+    workspace/calibration/table_homography_gui_20260731.npy
+  table_homography_sha256: >-
+    d82e6514f9943d63f34649b1b6b228c1fda5a35be17ae6463d6b029fca9f3694
+  table_homography_image_size_px: [1280, 720]
+  table_homography_rms_mm: 0.257541
+  table_homography_max_mm: 1.029862
+  homography_file: "workspace/calibration/table_homography_gui_20260731.npy"
+  camera_intrinsics_file: "workspace/calibration/camera_intrinsics.json"
+  table_to_robot_file: "workspace/calibration/table_to_robot.json"
+  calibration_sheet_to_robot_file: >-
+    workspace/calibration/contact_sheet_to_robot_base_20260731.json
+  calibration_sheet_to_robot_sha256: >-
+    151d447b7a1ff144295aabcbb11e60ade643cbad908b5b65f06b4d8f06f8b271
+  tool_center_offset_file: "workspace/calibration/tool_center_offset.json"
+
+motion:
+  vertical_reference_frame: "calibration_sheet_mm"
+  z_safe_mm: 60.0
+  z_pregrasp_mm: 20.0
+  z_pick_mm: "UNKNOWN"
+  z_preplace_mm: 20.0
+  z_place_mm: "UNKNOWN"
+  pick_place_contact_height_file: >-
+    workspace/calibration/pick_place_contact_height.json
+  pick_place_contact_height_status: "NOT_GENERATED"
+  pick_place_contact_height_source: >-
+    z_pick_mm/z_place_mm are loaded at runtime from the accepted contact-height
+    file, never from this registry; the file must record measured heights,
+    measured magnet settle times, and quality.status == accepted with
+    single_piece_success_rate >= 0.8; until it exists, automatic PICK/PLACE
+    stays LOCKED
+  precision_terminal_radial_compensation_mm: 3.0
+  precision_terminal_pitch_command_deg: -87.5
+  precision_terminal_expected_loaded_pitch_deg: -90.0
+  precision_terminal_p_coefficient_raw: 24
+  precision_terminal_acceleration_raw: 30
+  empty_speed_scale: "UNKNOWN"
+  holding_speed_scale: "UNKNOWN"
+
+magnet:
+  gpio_chip: "/dev/gpiochip0"
+  gpio_line_bcm: 17
+  relay_active_high: false
+  relay_control_ready: true
+  relay_control_ready_source: >-
+    operator-confirmed: relay responds correctly on BCM GPIO17 with active-low
+    trigger; this is not an electrical, thermal, pickup, or endurance test
+  software_on_timeout_ms: 10000
+  rated_voltage_v: "UNKNOWN"
+  coil_resistance_ohm: "UNKNOWN"
+  measured_current_a: "UNKNOWN"
+  on_settle_ms: "UNKNOWN"
+  off_settle_ms: "UNKNOWN"
+  max_continuous_on_ms: "UNKNOWN"
+  effective_gap_test_mm: "MEASURE_FROM_REAL_STACK"
+  conservative_test_mass_g: 30
+
+vision:
+  camera_device: "/dev/video0"
+  camera_image_size_px: [1280, 720]
+  camera_fourcc: "MJPG"
+  minimum_piece_confidence: 0.12
+  segmentation_profile: "red-hsv-dual-band-20260731"
+  polygon_epsilon: "UNKNOWN"
+  max_marker_reprojection_error_px: "UNKNOWN"
+  px_per_mm: "UNKNOWN"
+  geometry_abs_tolerance_mm: "UNKNOWN"
+  geometry_rel_tolerance: "UNKNOWN"
+  vertex_tolerance_mm: "UNKNOWN"
+  ambiguity_score_gap: "UNKNOWN"
+  seam_strip_width_mm: "UNKNOWN"
+  seam_edge_exclusion_mm: "UNKNOWN"
+  generic_vision_confidence_threshold: "UNKNOWN"
+  generic_vision_enabled: false
+  texture_enabled: false
+  rounded_corner_recovery_default: false
+
+puzzle:
+  solver_time_budget_ms: 10000
+  solver_max_expansions: "UNKNOWN"
+  partial_offset_step_mm: "UNKNOWN"
+  texture_top_k: "UNKNOWN"
+
+supervisor:
+  global_timeout_s: 120
+  max_pick_retries: "UNKNOWN"
+  max_release_retries: "UNKNOWN"
+  act_enabled: false
+  max_vision_age_ms: 30000
+  max_vision_age_source: >-
+    internal safety limit; sweep always captures a new frame before robot
+    connection; not an official or measured camera-performance claim
+  park_tolerance_deg: 4.0
+  park_follow_tolerance_deg: 8.0
+  sweep_dwell_s: 0.0
+  magnet_on_settle_ms: "UNKNOWN"
+  magnet_off_settle_ms: "UNKNOWN"
+  automatic_pick_place_enabled: false
+  automatic_pick_place_gate_source: >-
+    runtime-gated: enabled only when the accepted contact-height file resolves
+    both heights and magnet settle times; this static false is the fail-closed
+    default, not a permanent block
+  transform_official: false
+
+feature_gates:
+  generic_vision_enabled: false
+  texture_enabled: false
+  magnet_enabled: true
+  act_enabled: false
+
+act:
+  checkpoint: "NONE"
+  input_camera_keys: []
+  action_dim: 5
+  inference_timeout_ms: 500
+  note: >-
+    500 ms is an internal decision gate, not an official hardware guarantee

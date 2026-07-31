@@ -1,0 +1,14 @@
+{
+  "base_x": -41.17432504,
+  "base_y": 148.36844793,
+  "rot_deg": -4.9263,
+  "method": "manual A-H constrained kinematic fit",
+  "points": 8,
+  "xy_rms_mm": 6.96,
+  "xy_max_mm": 9.02,
+  "ray_perpendicular_rms_mm": 3.18,
+  "kinematic_joint_offsets_deg": [0.0, 0.9248, 3.5343, 28.6032],
+  "l1_effective_mm": 104.1573,
+  "physical_lengths_mm": {"L1": 116.6, "L2": 116.0, "L3": 135.0, "L4": 98.1},
+  "note": "A-H cover source and assembly zones; constrained model, no affine warp"
+}

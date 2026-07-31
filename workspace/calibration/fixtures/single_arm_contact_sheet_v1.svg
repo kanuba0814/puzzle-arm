@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="210mm" height="297mm" viewBox="0 0 210 297">
+  <rect x="0" y="0" width="210" height="297" fill="white"/>
+  <rect x="5" y="5" width="200" height="287" fill="none" stroke="black" stroke-width="0.25"/>
+  <style>
+    .title { font: bold 4px sans-serif; }
+    .note { font: 2.6px sans-serif; }
+    .label { font: bold 4px sans-serif; text-anchor: middle; }
+    .coord { font: 2.3px monospace; text-anchor: middle; }
+    .exact { fill: none; stroke: #111; stroke-width: 0.35; }
+    .fit { fill: none; stroke: #1359b5; stroke-width: 0.3; stroke-dasharray: 1.2 1.2; }
+    .holdout { fill: none; stroke: #c01818; stroke-width: 0.3; stroke-dasharray: 1.2 1.2; }
+  </style>
+  <text x="105" y="10" class="title" text-anchor="middle">SO-101 TCP CONTACT SHEET v1 — PRINT AT 100%</text>
+  <text x="105" y="15" class="note" text-anchor="middle">20.00 mm exact circle / 26.00 mm guide · magnet OFF · origin: bottom-left</text>
+
+  <!-- A fit (35,250) -->
+  <g transform="translate(35,47)"><circle r="10" class="exact"/><circle r="13" class="fit"/><path d="M-16 0H-10M10 0H16M0-16V-10M0 10V16" class="fit"/><text y="-18" class="label" fill="#1359b5">A</text><text y="20" class="coord">35,250 FIT</text></g>
+  <!-- B fit (105,250) -->
+  <g transform="translate(105,47)"><circle r="10" class="exact"/><circle r="13" class="fit"/><path d="M-16 0H-10M10 0H16M0-16V-10M0 10V16" class="fit"/><text y="-18" class="label" fill="#1359b5">B</text><text y="20" class="coord">105,250 FIT</text></g>
+  <!-- D fit (175,250) -->
+  <g transform="translate(175,47)"><circle r="10" class="exact"/><circle r="13" class="fit"/><path d="M-16 0H-10M10 0H16M0-16V-10M0 10V16" class="fit"/><text y="-18" class="label" fill="#1359b5">D</text><text y="20" class="coord">175,250 FIT</text></g>
+
+  <!-- M/N holdout (y=210) -->
+  <g transform="translate(70,87)"><circle r="10" class="exact"/><circle r="13" class="holdout"/><path d="M-16 0H-10M10 0H16M0-16V-10M0 10V16" class="holdout"/><text y="-18" class="label" fill="#c01818">M</text><text y="20" class="coord">70,210 HOLDOUT</text></g>
+  <g transform="translate(140,87)"><circle r="10" class="exact"/><circle r="13" class="holdout"/><path d="M-16 0H-10M10 0H16M0-16V-10M0 10V16" class="holdout"/><text y="-18" class="label" fill="#c01818">N</text><text y="20" class="coord">140,210 HOLDOUT</text></g>
+
+  <!-- E/F/G fit (y=170) -->
+  <g transform="translate(35,127)"><circle r="10" class="exact"/><circle r="13" class="fit"/><path d="M-16 0H-10M10 0H16M0-16V-10M0 10V16" class="fit"/><text y="-18" class="label" fill="#1359b5">E</text><text y="20" class="coord">35,170 FIT</text></g>
+  <g transform="translate(105,127)"><circle r="10" class="exact"/><circle r="13" class="fit"/><path d="M-16 0H-10M10 0H16M0-16V-10M0 10V16" class="fit"/><text y="-18" class="label" fill="#1359b5">F</text><text y="20" class="coord">105,170 FIT</text></g>
+  <g transform="translate(175,127)"><circle r="10" class="exact"/><circle r="13" class="fit"/><path d="M-16 0H-10M10 0H16M0-16V-10M0 10V16" class="fit"/><text y="-18" class="label" fill="#1359b5">G</text><text y="20" class="coord">175,170 FIT</text></g>
+
+  <!-- O/P holdout (y=120) -->
+  <g transform="translate(70,177)"><circle r="10" class="exact"/><circle r="13" class="holdout"/><path d="M-16 0H-10M10 0H16M0-16V-10M0 10V16" class="holdout"/><text y="-18" class="label" fill="#c01818">O</text><text y="20" class="coord">70,120 HOLDOUT</text></g>
+  <g transform="translate(140,177)"><circle r="10" class="exact"/><circle r="13" class="holdout"/><path d="M-16 0H-10M10 0H16M0-16V-10M0 10V16" class="holdout"/><text y="-18" class="label" fill="#c01818">P</text><text y="20" class="coord">140,120 HOLDOUT</text></g>
+
+  <!-- H/I fit (y=80) -->
+  <g transform="translate(35,217)"><circle r="10" class="exact"/><circle r="13" class="fit"/><path d="M-16 0H-10M10 0H16M0-16V-10M0 10V16" class="fit"/><text y="-18" class="label" fill="#1359b5">H</text><text y="20" class="coord">35,80 FIT</text></g>
+  <g transform="translate(105,217)"><circle r="10" class="exact"/><circle r="13" class="fit"/><path d="M-16 0H-10M10 0H16M0-16V-10M0 10V16" class="fit"/><text y="-18" class="label" fill="#1359b5">I</text><text y="20" class="coord">105,80 FIT</text></g>
+
+  <!-- Scale verification -->
+  <g transform="translate(20,280)">
+    <path d="M0 0H100M0-3V3M100-3V3M10-1.5V1.5M20-1.5V1.5M30-1.5V1.5M40-1.5V1.5M50-1.5V1.5M60-1.5V1.5M70-1.5V1.5M80-1.5V1.5M90-1.5V1.5" fill="none" stroke="black" stroke-width="0.35"/>
+    <text x="50" y="6" class="note" text-anchor="middle">VERIFY THIS LINE = 100.00 mm</text>
+  </g>
+  <path d="M8 289H14M11 286V292" stroke="black" stroke-width="0.3"/>
+  <text x="16" y="291" class="note">sheet origin (0,0) is bottom-left page corner</text>
+</svg>

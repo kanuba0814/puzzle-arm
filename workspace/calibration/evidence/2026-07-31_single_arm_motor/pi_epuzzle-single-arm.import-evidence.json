@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "timestamp": "2026-07-31T10:28:51+0800",
+  "robot_type": "so101_follower_5d",
+  "source_arm": "so101_follower_modified_single_arm",
+  "method": "import exact-five-axis calibration from attested same follower",
+  "goal_position_commands_sent": 0,
+  "joint_order": [
+    "shoulder_pan",
+    "shoulder_lift",
+    "elbow_flex",
+    "wrist_flex",
+    "wrist_roll"
+  ],
+  "source_file_name": "lerobot_follower_5d_candidate.json",
+  "source_file_sha256": "ffde2ce4fd56515ad06691014ce714555fb731893daf6510dde05b1d3e343273",
+  "source_bundle_sha256": "52c40e9cd1c6a366a512c35ae27d7e5733ca39df18b930da134dfa64319c948e",
+  "target_file_name": "epuzzle-single-arm.json",
+  "target_file_sha256": "89ea5079eb9bb35012866d736d0438d419ee57c201e51e11a61530e3e6440ca8",
+  "scope": "motor normalization only; not accepted TCP/kinematic calibration"
+}

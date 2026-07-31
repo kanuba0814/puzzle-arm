@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MotionResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "goal_id",
+    "timestamp_ns",
+    "success",
+    "error_code",
+    "message",
+    "calibration_id",
+    "planned_waypoints",
+    "executed_waypoints",
+    "final_joint_deg"
+  ],
+  "properties": {
+    "goal_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "timestamp_ns": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "success": {
+      "type": "boolean"
+    },
+    "error_code": {
+      "enum": [
+        "NONE",
+        "IK_NO_SOLUTION",
+        "ROBOT_COMM_TIMEOUT",
+        "SAFETY_REJECTED",
+        "GLOBAL_TIMEOUT"
+      ]
+    },
+    "message": {
+      "type": "string"
+    },
+    "calibration_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "planned_waypoints": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "executed_waypoints": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "final_joint_deg": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "shoulder_pan.pos",
+            "shoulder_lift.pos",
+            "elbow_flex.pos",
+            "wrist_flex.pos",
+            "wrist_roll.pos"
+          ],
+          "properties": {
+            "shoulder_pan.pos": {
+              "type": "number"
+            },
+            "shoulder_lift.pos": {
+              "type": "number"
+            },
+            "elbow_flex.pos": {
+              "type": "number"
+            },
+            "wrist_flex.pos": {
+              "type": "number"
+            },
+            "wrist_roll.pos": {
+              "type": "number"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

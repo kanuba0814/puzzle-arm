@@ -1,0 +1,14 @@
+captured_at=2026-07-31T20:47:24+08:00
+gui_active=active
+gui_enabled=enabled
+supervisor_active=inactive
+magnet_safe=active
+arm_node=/dev/ttyACM0
+motion_lock=absent_operator_removed
+serial_gpio_holders=
+usb_failure_count=0
+throttled=throttled=0x0
+836585fa451956f72e12e25747c8e13d8377ddd0e007a0566996a6c9f986b7dd  /opt/epuzzle/workspace/src/control/motion_controller.py
+1693f1e24c063e683491df3af46f3da9fe93aeb071eb22977df4252d7b82b387  /opt/epuzzle/workspace/src/integration/park_sequence.py
+b36c263165ebab0e48b3ede94acc26d8279145d72529c8c968bd392050915c4e  /opt/epuzzle/workspace/tools/supervisor_run.py
+f87aa74af726f054a2b321edfc07f73167fd636000eec3ee724d150fa79ffdf1  /opt/epuzzle/workspace/apps/pick_place_page.py

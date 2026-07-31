@@ -1,0 +1,260 @@
+{
+  "retrieved_at": "2026-07-29",
+  "policy": "Use official/fixed sources; dynamic main links must be locally pinned before use.",
+  "sources": [
+    {
+      "id": "competition-e-2026",
+      "name": "2026 电赛 E题《拼图装置》",
+      "authority": "赛题正式文件",
+      "version": "2026-07-29",
+      "url": null,
+      "local_path": "official_docs/competition/E题_拼图装置.pdf",
+      "status": "downloaded",
+      "notes": "从用户上传的正式赛题压缩包解出；题面事实最高优先级",
+      "bytes": 585722,
+      "sha256": "1230aa018fa86a98ba3b2e73d55935e4065a990e2e9c230a560da1514d5d3f8e"
+    },
+    {
+      "id": "act-paper",
+      "name": "Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware",
+      "authority": "ACT 论文原文",
+      "version": "arXiv:2304.13705",
+      "url": "https://arxiv.org/abs/2304.13705",
+      "local_path": "official_docs/papers/ACT_paper_2304.13705.pdf",
+      "status": "downloaded",
+      "notes": "原始 ACT 研究；论文中的示教数量和性能不能直接外推到本项目",
+      "bytes": 5353485,
+      "sha256": "2e2fe25860f5f9cee9e655a2714e9f2264a7a5078bcd267c16d3f39af461345a"
+    },
+    {
+      "id": "lerobot-paper",
+      "name": "LeRobot: An Open-Source Library for End-to-End Robot Learning",
+      "authority": "LeRobot 论文原文",
+      "version": "arXiv:2602.22818 / ICLR 2026",
+      "url": "https://arxiv.org/abs/2602.22818",
+      "local_path": "official_docs/papers/LeRobot_paper_2602.22818.pdf",
+      "status": "downloaded",
+      "notes": "框架论文",
+      "bytes": 10299084,
+      "sha256": "0f59ee1894d9f78534aa89c54610c022417d1963f0e315bd0c10d0325aca3a99"
+    },
+    {
+      "id": "lerobot-pypi",
+      "name": "LeRobot PyPI",
+      "authority": "官方发布元数据",
+      "version": "0.6.0",
+      "commit": "30da8e687a6dfc617fcd94afc367ac7071c376ce",
+      "url": "https://pypi.org/project/lerobot/",
+      "local_path": null,
+      "status": "link-locked",
+      "notes": "0.6.0 发布于 2026-07-06；Python >=3.12"
+    },
+    {
+      "id": "lerobot-release",
+      "name": "LeRobot v0.6.0 GitHub release",
+      "authority": "官方固定 release",
+      "version": "v0.6.0",
+      "commit": "30da8e687a6dfc617fcd94afc367ac7071c376ce",
+      "url": "https://github.com/huggingface/lerobot/releases/tag/v0.6.0",
+      "local_path": null,
+      "status": "link-locked",
+      "notes": "比赛依赖固定 tag，不使用 main"
+    },
+    {
+      "id": "lerobot-so101-doc",
+      "name": "LeRobot SO-101 guide",
+      "authority": "官方版本化文档",
+      "version": "v0.6.0",
+      "url": "https://huggingface.co/docs/lerobot/v0.6.0/so101",
+      "local_path": null,
+      "status": "link-locked",
+      "notes": "原版 follower 为 6 个 STS3215；本项目通过自定义 5D 插件改造"
+    },
+    {
+      "id": "lerobot-act-doc",
+      "name": "LeRobot ACT guide",
+      "authority": "官方版本化文档",
+      "version": "v0.6.0",
+      "url": "https://huggingface.co/docs/lerobot/v0.6.0/act",
+      "local_path": null,
+      "status": "link-locked",
+      "notes": "模型架构和配置依据"
+    },
+    {
+      "id": "lerobot-byoh-doc",
+      "name": "LeRobot Bring Your Own Hardware",
+      "authority": "官方版本化文档",
+      "version": "v0.6.0",
+      "url": "https://huggingface.co/docs/lerobot/v0.6.0/integrate_hardware",
+      "local_path": null,
+      "status": "link-locked",
+      "notes": "自定义 Robot、features 与插件机制依据"
+    },
+    {
+      "id": "lerobot-il-doc",
+      "name": "LeRobot Imitation Learning on Real-World Robots",
+      "authority": "官方版本化文档",
+      "version": "v0.6.0",
+      "url": "https://huggingface.co/docs/lerobot/v0.6.0/il_robots",
+      "local_path": null,
+      "status": "link-locked",
+      "notes": "录制、训练、部署流程依据"
+    },
+    {
+      "id": "lerobot-dataset-v3",
+      "name": "LeRobotDataset v3",
+      "authority": "官方版本化文档",
+      "version": "v0.6.0",
+      "url": "https://huggingface.co/docs/lerobot/v0.6.0/lerobot-dataset-v3",
+      "local_path": null,
+      "status": "link-locked",
+      "notes": "数据组织依据"
+    },
+    {
+      "id": "lerobot-async",
+      "name": "LeRobot asynchronous inference",
+      "authority": "官方版本化文档",
+      "version": "v0.6.0",
+      "url": "https://huggingface.co/docs/lerobot/v0.6.0/async",
+      "local_path": null,
+      "status": "link-locked",
+      "notes": "仅在同步基线稳定后考虑"
+    },
+    {
+      "id": "lerobot-so-follower-source",
+      "name": "SOFollower source",
+      "authority": "官方固定 tag 源码",
+      "version": "v0.6.0",
+      "url": "https://github.com/huggingface/lerobot/blob/v0.6.0/src/lerobot/robots/so_follower/so_follower.py",
+      "local_path": null,
+      "status": "link-locked",
+      "notes": "电机表和 feature 自动生成的直接依据"
+    },
+    {
+      "id": "lerobot-so-leader-source",
+      "name": "SOLeader source",
+      "authority": "官方固定 tag 源码",
+      "version": "v0.6.0",
+      "url": "https://github.com/huggingface/lerobot/blob/v0.6.0/src/lerobot/teleoperators/so_leader/so_leader.py",
+      "local_path": null,
+      "status": "link-locked",
+      "notes": "leader 六轴定义依据"
+    },
+    {
+      "id": "lerobot-act-config-source",
+      "name": "ACTConfig source",
+      "authority": "官方固定 tag 源码",
+      "version": "v0.6.0",
+      "url": "https://github.com/huggingface/lerobot/blob/v0.6.0/src/lerobot/policies/act/configuration_act.py",
+      "local_path": null,
+      "status": "link-locked",
+      "notes": "输入输出特征和 action chunk 配置依据"
+    },
+    {
+      "id": "so-arm100-repo",
+      "name": "SO-ARM100/SO-101 hardware repository",
+      "authority": "TheRobotStudio 官方硬件仓库",
+      "version": "main (dynamic)",
+      "url": "https://github.com/TheRobotStudio/SO-ARM100",
+      "local_path": null,
+      "status": "dynamic-link",
+      "notes": "使用前必须本地 clone 并记录 commit；不可把 main 当固定版本"
+    },
+    {
+      "id": "so101-urdf",
+      "name": "SO-101 URDF",
+      "authority": "TheRobotStudio 官方仓库",
+      "version": "main (dynamic)",
+      "url": "https://github.com/TheRobotStudio/SO-ARM100/blob/main/Simulation/SO101/so101_new_calib.urdf",
+      "local_path": null,
+      "status": "dynamic-link",
+      "notes": "已有公开 issue 指出旧 URDF 可能存在限制/轴向问题；必须与实物和标定核对"
+    },
+    {
+      "id": "opencv-index",
+      "name": "OpenCV documentation",
+      "authority": "OpenCV 官方文档",
+      "version": "4.13.0",
+      "url": "https://docs.opencv.org/4.13.0/",
+      "local_path": null,
+      "status": "link-locked",
+      "notes": "视觉 API 基线"
+    },
+    {
+      "id": "opencv-calib3d",
+      "name": "OpenCV calib3d",
+      "authority": "OpenCV 官方文档",
+      "version": "4.13.0",
+      "url": "https://docs.opencv.org/4.13.0/d9/d0c/group__calib3d.html",
+      "local_path": null,
+      "status": "link-locked",
+      "notes": "内参、PnP、单应与几何变换相关 API"
+    },
+    {
+      "id": "opencv-transform",
+      "name": "OpenCV geometric image transformations",
+      "authority": "OpenCV 官方文档",
+      "version": "4.13.0",
+      "url": "https://docs.opencv.org/4.13.0/da/d54/group__imgproc__transform.html",
+      "local_path": null,
+      "status": "link-locked",
+      "notes": "warpPerspective 等"
+    },
+    {
+      "id": "opencv-distance-transform",
+      "name": "OpenCV distance transform tutorial",
+      "authority": "OpenCV 官方文档",
+      "version": "4.13.0",
+      "url": "https://docs.opencv.org/4.13.0/d2/dbd/tutorial_distance_transform.html",
+      "local_path": null,
+      "status": "link-locked",
+      "notes": "最大内接区域抓取点依据"
+    },
+    {
+      "id": "rpi5-brief",
+      "name": "Raspberry Pi 5 product brief",
+      "authority": "Raspberry Pi Ltd 官方产品简报",
+      "version": "Published April 2026",
+      "url": "https://pip.raspberrypi.com/documents/RP-008348-DS-raspberry-pi-5-product-brief.pdf",
+      "local_path": "official_docs/raspberry_pi/Raspberry_Pi_5_product_brief_2026-04.pdf",
+      "status": "downloaded",
+      "notes": "BCM2712 2.4GHz 四核 Cortex-A76、8GB variant、5V/5A 等",
+      "bytes": 1095537,
+      "sha256": "10583c80f867e05af185742bb0f80448458c606a32dd3dbefbbcfca480b59ead"
+    },
+    {
+      "id": "rpi-27w-brief",
+      "name": "Raspberry Pi 27W USB-C Power Supply product brief",
+      "authority": "Raspberry Pi Ltd 官方产品简报",
+      "version": "Published October 2023",
+      "url": "https://datasheets.raspberrypi.com/power-supply/27w-usb-c-power-supply-product-brief.pdf",
+      "local_path": "official_docs/raspberry_pi/Raspberry_Pi_27W_USB-C_power_supply_product_brief.pdf",
+      "status": "downloaded",
+      "notes": "5.1V/5A profile",
+      "bytes": 1233433,
+      "sha256": "d5b4cc0d9724b7e917f29a76155d1f049802ed86e4d806990aee099ab91f66a9"
+    },
+    {
+      "id": "feetech-c001",
+      "name": "Feetech STS3215 7.4V product information",
+      "authority": "Feetech 官方页面",
+      "version": "STS3215 / C001 family; verify physical label",
+      "url": "https://www.feetechrc.com/2020-05-13_56655.html",
+      "local_path": null,
+      "status": "link-locked",
+      "notes": "7.4V、1:345、4096 position units 等；采购件以标签为准"
+    },
+    {
+      "id": "feetech-c018",
+      "name": "Feetech ST-3215-C018 12V detailed specification",
+      "authority": "Feetech 官方规格书",
+      "version": "C018 12V",
+      "url": "https://www.feetechrc.com/Data/feetechrc/upload/file/20240507/6385067068652648096680943.pdf",
+      "local_path": "official_docs/datasheets/Feetech_STS3215_C018_12V_spec.pdf",
+      "status": "downloaded",
+      "notes": "仅适用于实物标签确认为 C018 的舵机",
+      "bytes": 569854,
+      "sha256": "3f1dc84e470ac89cbd7b7244183fcc62b7f7a5345aa41a62120280a9b7b26f5e"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "locked": true,
+  "reason": "2026-07-31 xHCI host controller xhci-hcd.1 died during bumpless inspection connection; final PARK and torque-off could not be confirmed",
+  "incident_time": "2026-07-31T19:18:46+08:00",
+  "evidence_path": "workspace/calibration/evidence/2026-07-31_full_stack_deployment/",
+  "clear_requires": [
+    "现场人工支撑机械臂",
+    "切断机械臂舵机电源",
+    "恢复 USB 后只读确认五轴设备枚举",
+    "只读确认当前关节位置与正式 PARK 状态",
+    "由现场操作者明确批准解除运动锁"
+  ]
+}

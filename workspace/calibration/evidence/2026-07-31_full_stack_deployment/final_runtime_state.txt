@@ -1,0 +1,18 @@
+captured_at=2026-07-31T20:06:58+08:00
+gui_active=active
+gui_enabled=enabled
+supervisor_active=inactive
+magnet_safe=active
+arm_node=missing
+tty_node=missing
+motion_lock=present
+motion_lock_mode=644:root:root
+serial_holders=
+gpio_holders=
+fb_holders=  3766
+throttled=throttled=0x0
+MainPID=3766
+ExecMainStatus=0
+User=epuzzle
+Group=epuzzle
+SubState=running

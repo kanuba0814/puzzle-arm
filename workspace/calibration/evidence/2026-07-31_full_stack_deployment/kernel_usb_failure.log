@@ -1,0 +1,8 @@
+Jul 31 19:18:46 epuzzle-pi kernel: xhci-hcd xhci-hcd.1: xHCI host not responding to stop endpoint command
+Jul 31 19:18:46 epuzzle-pi kernel: xhci-hcd xhci-hcd.1: xHCI host controller not responding, assume dead
+Jul 31 19:18:46 epuzzle-pi kernel: xhci-hcd xhci-hcd.1: HC died; cleaning up
+Jul 31 19:18:46 epuzzle-pi kernel: usb 3-1: USB disconnect, device number 2
+Jul 31 19:18:46 epuzzle-pi kernel: cdc_acm 3-2:1.1: acm_start_wb - usb_submit_urb(write bulk) failed: -19
+Jul 31 19:18:46 epuzzle-pi kernel: cdc_acm 3-2:1.1: acm_start_wb - usb_submit_urb(write bulk) failed: -19
+Jul 31 19:18:46 epuzzle-pi kernel: cdc_acm 3-2:1.1: acm_start_wb - usb_submit_urb(write bulk) failed: -19
+Jul 31 19:18:46 epuzzle-pi kernel: usb 3-2: USB disconnect, device number 3

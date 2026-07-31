@@ -1,0 +1,28 @@
+[Unit]
+Description=E Puzzle hardware and configuration preflight
+After=epuzzle-magnet-safe.service local-fs.target
+Requires=epuzzle-magnet-safe.service
+Before=epuzzle-supervisor.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/epuzzle/epuzzle.env
+ExecStart=/usr/local/sbin/epuzzle-selfcheck
+User=epuzzle
+Group=epuzzle
+SupplementaryGroups=dialout video gpio render input
+UMask=0027
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadOnlyPaths=/opt/epuzzle
+ReadWritePaths=/opt/epuzzle/workspace/logs /opt/epuzzle/workspace/calibration
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=epuzzle.target

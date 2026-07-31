@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "command": "park",
+  "result": "PASS",
+  "magnet_enabled": false,
+  "message": "已在正式 PARK",
+  "started_at_ns": 946642639898,
+  "duration_s": 1.513,
+  "events": [
+    {
+      "error_code": "NONE",
+      "route": [],
+      "final_state": "PARKED",
+      "events_path": "workspace/logs/supervisor/park.jsonl"
+    }
+  ],
+  "success": true,
+  "error_code": "NONE",
+  "mode": "park",
+  "route": [],
+  "duration_ms": 1513,
+  "final_state": "PARKED",
+  "events_path": "workspace/logs/supervisor/park.jsonl"
+}

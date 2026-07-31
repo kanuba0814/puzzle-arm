@@ -1,0 +1,37 @@
+[Unit]
+Description=E Puzzle deterministic supervisor
+After=epuzzle-preflight.service
+Requires=epuzzle-preflight.service
+ConditionFileIsExecutable=/opt/epuzzle/workspace/src/integration/run_supervisor.py
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/epuzzle/epuzzle.env
+WorkingDirectory=/opt/epuzzle
+ExecStart=/opt/epuzzle/venv/bin/python /opt/epuzzle/workspace/src/integration/run_supervisor.py
+ExecStopPost=/usr/local/lib/epuzzle/magnet-off.py
+Restart=on-failure
+RestartSec=2s
+TimeoutStartSec=30s
+TimeoutStopSec=10s
+KillSignal=SIGINT
+User=epuzzle
+Group=epuzzle
+SupplementaryGroups=dialout video gpio render input
+UMask=0027
+Nice=-5
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadOnlyPaths=/opt/epuzzle
+ReadWritePaths=/opt/epuzzle/workspace/logs /opt/epuzzle/workspace/calibration
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+LimitNOFILE=4096
+
+[Install]
+WantedBy=epuzzle.target

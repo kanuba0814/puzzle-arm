@@ -1,0 +1,17 @@
+captured_at=2026-07-31T19:21:20+08:00
+throttled=throttled=0x0
+magnet_safe=active
+gui=active
+arm_node=missing
+tty_node=missing
+gpio_holders=
+serial_holders=
+/:  Bus 001.Port 001: Dev 001, Class=root_hub, Driver=xhci-hcd/2p, 480M
+    |__ Port 001: Dev 002, If 0, Class=Human Interface Device, Driver=usbhid, 12M
+    |__ Port 002: Dev 003, If 0, Class=Video, Driver=uvcvideo, 480M
+    |__ Port 002: Dev 003, If 1, Class=Video, Driver=uvcvideo, 480M
+    |__ Port 002: Dev 003, If 2, Class=Communications, Driver=cdc_ncm, 480M
+    |__ Port 002: Dev 003, If 3, Class=CDC Data, Driver=cdc_ncm, 480M
+/:  Bus 002.Port 001: Dev 001, Class=root_hub, Driver=xhci-hcd/1p, 5000M
+/:  Bus 003.Port 001: Dev 001, Class=root_hub, Driver=xhci-hcd/2p, 480M
+/:  Bus 004.Port 001: Dev 001, Class=root_hub, Driver=xhci-hcd/1p, 5000M

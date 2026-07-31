@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "command": "sweep-shortest",
+  "result": "FAIL",
+  "magnet_enabled": false,
+  "message": "write failed: [Errno 19] No such device",
+  "started_at_ns": 3693061553664,
+  "duration_s": 14.059,
+  "events": [
+    {
+      "error_code": "SAFETY_REJECTED",
+      "route": [],
+      "final_state": "FAILED",
+      "events_path": "workspace/logs/supervisor/sweep-shortest.jsonl"
+    }
+  ],
+  "success": false,
+  "error_code": "SAFETY_REJECTED",
+  "mode": "sweep",
+  "route": [],
+  "duration_ms": 14059,
+  "final_state": "FAILED",
+  "events_path": "workspace/logs/supervisor/sweep-shortest.jsonl"
+}

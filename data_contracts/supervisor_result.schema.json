@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SupervisorResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "run_id", "final_state", "success", "error_code", "message", "events_path", "vision_batch_ref", "plan_ref", "duration_ms"],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1}, "run_id": {"type": "string", "minLength": 1}, "final_state": {"type": "string"}, "success": {"type": "boolean"},
+    "error_code": {"type": "string"}, "message": {"type": "string"}, "events_path": {"type": "string"},
+    "vision_batch_ref": {"type": ["string", "null"]}, "plan_ref": {"type": ["string", "null"]}, "duration_ms": {"type": "integer", "minimum": 0}
+  }
+}

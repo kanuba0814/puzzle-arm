@@ -1,0 +1,11 @@
+来源: /opt/epuzzle/workspace/calibration/evidence/2026-07-31_single_arm_motor/lerobot_follower_5d_candidate.json
+来源 SHA256: ffde2ce4fd56515ad06691014ce714555fb731893daf6510dde05b1d3e343273
+目标: /home/epuzzle/.cache/huggingface/lerobot/calibration/robots/so101_follower_5d/epuzzle-single-arm.json
+固定关节: shoulder_pan, shoulder_lift, elbow_flex, wrist_flex, wrist_roll
+操作范围: 只写 Homing_Offset/范围及标定文件，不发送 Goal_Position。
+确认来源属于当前同一台 follower，且机械臂已托稳。
+输入 IMPORT-SAME-FOLLOWER-5D-CALIBRATION 才写入: IMPORT-SAME-FOLLOWER-5D-CALIBRATION
+导入完成: /home/epuzzle/.cache/huggingface/lerobot/calibration/robots/so101_follower_5d/epuzzle-single-arm.json
+回读一致；证据: /home/epuzzle/.cache/huggingface/lerobot/calibration/robots/so101_follower_5d/epuzzle-single-arm.import-evidence.json
+目标 SHA256: 89ea5079eb9bb35012866d736d0438d419ee57c201e51e11a61530e3e6440ca8
+舵机保持断力矩；TCP/运动学 accepted 门禁仍未解锁。

@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "date": "2026-07-31",
+  "calibration_id": "single-arm-contact-sheet-v2-20260731",
+  "test": "production_low_height_observation",
+  "supervisor_active": false,
+  "magnet_enabled": false,
+  "reference_frame": "calibration_sheet_mm",
+  "observations": [
+    {
+      "commanded_height_mm": 10.0,
+      "dwell_s": 5.0,
+      "motion_result": "success",
+      "operator_observation": "过低或碰到纸面",
+      "decision": "reject as automatic clearance height"
+    },
+    {
+      "commanded_height_mm": 20.0,
+      "dwell_s": 10.0,
+      "motion_result": "success",
+      "final_joint_deg": [
+        2.593407,
+        20.923077,
+        43.384615,
+        38.769231,
+        -84.615385
+      ],
+      "operator_observation": "高度合适，作为安全低位",
+      "decision": "accept as competition PREGRASP and observation height"
+    }
+  ],
+  "frozen_competition_heights_mm": {
+    "safe": 60.0,
+    "pregrasp": 20.0,
+    "pick": "UNKNOWN"
+  },
+  "notes": [
+    "The 10 mm result shows that torque-off contact fitting and encoder readback do not bound loaded TCP clearance tightly enough for automatic use.",
+    "No magnet activation, pickup, place, or automatic low contact was performed.",
+    "The final state was the supported park pose with torque disabled."
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "supervisor_run_status.schema.json",
+  "title": "SupervisorRunStatus",
+  "description": "supervisor_run.py 运行期间周期重写的心跳文件；GUI 据此显示阶段与进度。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "command",
+    "phase",
+    "progress",
+    "updated_at_ns"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "command": {
+      "enum": [
+        "detect",
+        "red-baseline",
+        "sweep-shortest",
+        "pregrasp",
+        "park",
+        "puzzle-shadow",
+        "pick-place",
+        "repeat",
+        "commission-center",
+        "competition-self-color",
+        "competition-white",
+        "competition-card",
+        "manual-read-state",
+        "manual-jog-joint",
+        "manual-jog-cartesian",
+        "manual-magnet-pulse",
+        "manual-magnet-off"
+      ]
+    },
+    "phase": {
+      "type": "string",
+      "minLength": 1,
+      "description": "当前阶段标识，例如 page-sweep-2-low。"
+    },
+    "progress": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "updated_at_ns": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

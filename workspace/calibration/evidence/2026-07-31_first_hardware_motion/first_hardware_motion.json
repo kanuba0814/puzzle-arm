@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "date": "2026-07-31",
+  "robot_type": "so101_follower_5d",
+  "source_arm": "so101_follower_modified_single_arm",
+  "motor_calibration_sha256": "89ea5079eb9bb35012866d736d0438d419ee57c201e51e11a61530e3e6440ca8",
+  "kinematic_calibration_sha256_at_test": "d3b84a57d8f51f4a2ac827220a615594b25ef5ce959293549d8b5f60927e96b1",
+  "supervisor_active": false,
+  "magnet_enabled": false,
+  "tests": [
+    {
+      "name": "bumpless_torque_hold_2s",
+      "result": "pass",
+      "max_abs_drift_counts": {
+        "shoulder_pan": 0,
+        "shoulder_lift": 0,
+        "elbow_flex": 0,
+        "wrist_flex": 0,
+        "wrist_roll": 0
+      },
+      "torque_disabled_after_test": true
+    },
+    {
+      "name": "minimal_hardware_roundtrip",
+      "result": "pass",
+      "trajectory": [
+        "park",
+        "high_home",
+        "P_height60mm",
+        "Q_height60mm",
+        "P_height60mm",
+        "high_home",
+        "park"
+      ],
+      "command_step_deg": 1.0,
+      "command_period_s": 0.1,
+      "tracking_abort_threshold_deg": 6.0,
+      "maximum_observed_tracking_error_deg": 4.341246,
+      "maximum_stage_final_error_deg": 2.637363,
+      "park_start_joint_deg": [
+        -2.681319,
+        -106.901099,
+        96.747253,
+        75.604396,
+        -82.505495
+      ],
+      "park_final_joint_deg": [
+        -2.241758,
+        -106.725275,
+        96.395604,
+        76.571429,
+        -83.56044
+      ],
+      "maximum_park_return_error_deg": 1.054945,
+      "torque_disabled_after_test": true
+    }
+  ],
+  "stopped_attempts": [
+    "The first unfold attempt stopped after reaching the upright region because a 1.5 degree final tolerance was too strict for the loaded elbow; torque was disabled.",
+    "A following split-stage attempt exposed gravity sag while torque was off between suspended stages; it stopped on its final tolerance and disabled torque. The successful roundtrip kept torque enabled between all suspended stages and returned to the supported park pose before disabling it."
+  ]
+}

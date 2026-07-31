@@ -1,0 +1,111 @@
+{
+  "runId": "2f1a0e34-86b2-4bc5-920d-480b2be4ca23",
+  "agent": "reviewer",
+  "task": "Read-only safety/code review of the newly generated single-arm accepted kinematic calibration. Inspect: workspace/tools/fit_single_arm_kinematics.py, workspace/calibration/arm_kinematics_single_arm_accepted_20260731.json, workspace/calibration/contact_sheet_to_robot_base_20260731.json, workspace/calibration/evidence/2026-07-31_single_arm_contacts_v2/{single_arm_contacts_20260731.json,fit_report.json,README.md}, workspace/src/control/{kinematics.py,calibration.py}, and relevant schemas/tests. Check especially: production FK formula matches fitter; holdouts are excluded from fitting/model selection; sign/zero-offset semantics; transform direction; accepted thresholds; hidden leakage/overfit; unsafe claims. Report concrete blockers or say none, with file/line evidence. Do not modify files.\n\n## Acceptance Contract\nAcceptance level: attested\nCompletion is not accepted from prose alone. End with a structured acceptance report.\n\nCriteria:\n- criterion-1: Return concrete findings with file paths and severity when applicable\n\nRequired evidence: review-findings, residual-risks\n\nFinish with a fenced JSON block tagged `acceptance-report` in this shape:\nUse empty arrays when no items apply; array fields contain strings unless object entries are shown.\n`criteriaSatisfied[].status` must be exactly one of: satisfied, not-satisfied, not-applicable.\n`commandsRun[].result` must be exactly one of: passed, failed, not-run.\n`manualNotes` and `notes` are optional strings; an empty string means no note and does not satisfy `manual-notes` evidence.\n```acceptance-report\n{\n  \"criteriaSatisfied\": [\n    {\n      \"id\": \"criterion-1\",\n      \"status\": \"satisfied\",\n      \"evidence\": \"specific proof\"\n    }\n  ],\n  \"changedFiles\": [\n    \"src/file.ts\"\n  ],\n  \"testsAddedOrUpdated\": [\n    \"test/file.test.ts\"\n  ],\n  \"commandsRun\": [\n    {\n      \"command\": \"command\",\n      \"result\": \"passed\",\n      \"summary\": \"short result\"\n    }\n  ],\n  \"validationOutput\": [\n    \"validation output or concise summary\"\n  ],\n  \"residualRisks\": [\n    \"none\"\n  ],\n  \"noStagedFiles\": true,\n  \"diffSummary\": \"short description of the diff\",\n  \"reviewFindings\": [\n    \"blocker: file.ts:12 - issue found, or no blockers\"\n  ],\n  \"manualNotes\": \"anything else the parent should know\"\n}\n```",
+  "exitCode": 0,
+  "model": "openai-codex/gpt-5.6-sol:high",
+  "attemptedModels": [
+    "openai-codex/gpt-5.6-sol:high"
+  ],
+  "modelAttempts": [
+    {
+      "model": "openai-codex/gpt-5.6-sol:high",
+      "success": true,
+      "exitCode": 0,
+      "usage": {
+        "input": 55072,
+        "output": 4248,
+        "cacheRead": 35328,
+        "cacheWrite": 0,
+        "cost": 0.420464,
+        "turns": 4
+      }
+    }
+  ],
+  "acceptance": {
+    "status": "attested",
+    "evidenceStatus": "attested",
+    "explicit": false,
+    "effectiveAcceptance": {
+      "level": "attested",
+      "explicit": false,
+      "inferredReason": [
+        "read-only/reviewer-style agent"
+      ],
+      "criteria": [
+        {
+          "id": "criterion-1",
+          "must": "Return concrete findings with file paths and severity when applicable",
+          "evidence": [
+            "review-findings",
+            "residual-risks"
+          ],
+          "severity": "required"
+        }
+      ],
+      "evidence": [
+        "review-findings",
+        "residual-risks"
+      ],
+      "verify": [],
+      "stopRules": []
+    },
+    "inferredReason": [
+      "read-only/reviewer-style agent"
+    ],
+    "criteria": [
+      {
+        "id": "criterion-1",
+        "must": "Return concrete findings with file paths and severity when applicable",
+        "evidence": [
+          "review-findings",
+          "residual-risks"
+        ],
+        "severity": "required"
+      }
+    ],
+    "runtimeChecks": [],
+    "verifyRuns": [],
+    "childReport": {
+      "criteriaSatisfied": [
+        {
+          "id": "criterion-1",
+          "status": "satisfied",
+          "evidence": "Concrete blocker and residual risks are cited with file paths and line ranges."
+        }
+      ],
+      "changedFiles": [],
+      "testsAddedOrUpdated": [],
+      "commandsRun": [
+        {
+          "command": "git status --short && git diff -- <reviewed paths>",
+          "result": "failed",
+          "summary": "The supplied directory is not a Git worktree; no diff was available."
+        }
+      ],
+      "validationOutput": [
+        "Static comparison confirmed production FK and fitter formulas agree.",
+        "Static data-flow review confirmed holdouts are excluded from optimization and candidate scoring.",
+        "Transform inversion and accepted metric thresholds were checked for consistency."
+      ],
+      "residualRisks": [
+        "Hand-drawn target uncertainty and contact repeatability remain unquantified.",
+        "Only four same-session interior holdouts are available.",
+        "Holdouts contribute to generated soft limits.",
+        "Production loading does not verify hashes or recompute residual metrics."
+      ],
+      "noStagedFiles": true,
+      "diffSummary": "Read-only review; no files modified.",
+      "reviewFindings": [
+        "blocker: workspace/calibration/evidence/2026-07-31_single_arm_contacts_v2/fit_report.json:35-40 and workspace/tools/fit_single_arm_kinematics.py:342-348 - calibration is accepted despite its report declaring unresolved non-metric blockers for acceptance.",
+        "note: workspace/tools/fit_single_arm_kinematics.py:350-366 - holdouts are used to derive production soft limits, though not FK parameters or model selection.",
+        "note: workspace/tests/test_arm_calibration.py:54-66 - tests trust serialized metrics and do not reproduce the accepted fit."
+      ],
+      "manualNotes": "No files were modified and no runtime tests were run; findings are from read-only static inspection."
+    }
+  },
+  "launchContractDigest": "5f5620cb3d3d370715b0d6e1d3c7cecae0c1a735ce461300d0b908558d36632b",
+  "transcriptPath": "/home/gxxl/nudec-re101/.pi-subagents/artifacts/2f1a0e34-86b2-4bc5-920d-480b2be4ca23_reviewer_transcript.jsonl",
+  "skills": [],
+  "timestamp": 1785470992887
+}

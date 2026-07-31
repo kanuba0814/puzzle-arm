@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+build/
+dist/
+
+# 大文件/产物
+*.zip
+*.img
+*.img.zst
+*.npy
+*.npz
+*.onnx
+deployment/raspberry_pi/cache/
+deployment/raspberry_pi/output/*.img*
+workspace/runtime/
+workspace/logs/
+workspace/models/
+*.tar.gz
+
+# 环境与编辑器
+venv/
+.venv/
+.vscode/
+.idea/
+.DS_Store

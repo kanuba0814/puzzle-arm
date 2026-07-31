@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "date": "2026-07-31",
+  "test": "production_motion_controller_high_roundtrip",
+  "result": "pass",
+  "calibration_id": "single-arm-contact-sheet-v2-20260731",
+  "kinematic_calibration_sha256": "c207bae180e187b6c639cc848320195dafce1f468920a0f2eba7f00c621eab38",
+  "motion_config": {
+    "max_cartesian_step_mm": 5.0,
+    "max_orientation_step_deg": 3.0,
+    "max_joint_step_deg": 3.0,
+    "joint_tolerance_deg": 3.5,
+    "stable_samples": 3,
+    "poll_interval_s": 0.05,
+    "waypoint_timeout_s": 2.5,
+    "safe_min_z_mm": 0.0,
+    "contact_min_z_mm": -30.0,
+    "max_z_mm": 180.0
+  },
+  "bumpless_connect": true,
+  "supervisor_active": false,
+  "magnet_enabled": false,
+  "goals": [
+    {
+      "goal_id": "production-P-high",
+      "height_above_calibration_sheet_mm": 60.0,
+      "planned_waypoints": 19,
+      "executed_waypoints": 19,
+      "error_code": "NONE",
+      "success": true
+    },
+    {
+      "goal_id": "production-Q-high",
+      "height_above_calibration_sheet_mm": 60.0,
+      "planned_waypoints": 7,
+      "executed_waypoints": 7,
+      "error_code": "NONE",
+      "success": true
+    },
+    {
+      "goal_id": "production-P-high-return",
+      "height_above_calibration_sheet_mm": 60.0,
+      "planned_waypoints": 8,
+      "executed_waypoints": 8,
+      "error_code": "NONE",
+      "success": true
+    },
+    {
+      "goal_id": "production-HOME",
+      "planned_waypoints": 21,
+      "executed_waypoints": 21,
+      "error_code": "NONE",
+      "success": true
+    }
+  ],
+  "recovery_peak_tracking_error_deg": {
+    "park_to_home": 3.743842,
+    "home_to_park": 3.172827
+  },
+  "park_start_joint_deg": [
+    -1.538462,
+    -108.483516,
+    96.307692,
+    76.571429,
+    -83.56044
+  ],
+  "park_final_joint_deg": [
+    -0.923077,
+    -108.043956,
+    96.043956,
+    77.450549,
+    -82.857143
+  ],
+  "maximum_park_return_error_deg": 0.879121,
+  "torque_disabled_after_test": true
+}

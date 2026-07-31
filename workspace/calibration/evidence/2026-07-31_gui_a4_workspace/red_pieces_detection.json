@@ -1,0 +1,73 @@
+{
+  "frame_shape": [
+    720,
+    1280,
+    3
+  ],
+  "pieces": [
+    {
+      "center_pixel": [
+        555.09,
+        498.73
+      ],
+      "center_table_mm": [
+        143.943,
+        236.592
+      ],
+      "angle_deg": -27.775,
+      "pixel_area": 11103.0,
+      "size_table_mm": [
+        98.07,
+        48.34
+      ]
+    },
+    {
+      "center_pixel": [
+        763.43,
+        441.5
+      ],
+      "center_table_mm": [
+        46.592,
+        206.581
+      ],
+      "angle_deg": -81.723,
+      "pixel_area": 2499.0,
+      "size_table_mm": [
+        37.62,
+        20.31
+      ]
+    },
+    {
+      "center_pixel": [
+        673.05,
+        435.38
+      ],
+      "center_table_mm": [
+        89.146,
+        204.901
+      ],
+      "angle_deg": -64.358,
+      "pixel_area": 9567.0,
+      "size_table_mm": [
+        100.23,
+        29.93
+      ]
+    },
+    {
+      "center_pixel": [
+        559.73,
+        352.83
+      ],
+      "center_table_mm": [
+        143.801,
+        167.279
+      ],
+      "angle_deg": 89.97,
+      "pixel_area": 5586.0,
+      "size_table_mm": [
+        77.73,
+        25.53
+      ]
+    }
+  ]
+}

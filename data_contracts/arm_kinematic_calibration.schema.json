@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ArmKinematicCalibration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "calibration_id",
+    "robot_type",
+    "source_arm",
+    "frame",
+    "joint_features",
+    "geometry_mm",
+    "joint_mapping",
+    "quality",
+    "evidence_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "calibration_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "robot_type": {
+      "const": "so101_follower_5d"
+    },
+    "source_arm": {
+      "const": "so101_follower_modified_single_arm"
+    },
+    "frame": {
+      "const": "robot_base_mm"
+    },
+    "joint_features": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "const": "shoulder_pan.pos"
+        },
+        {
+          "const": "shoulder_lift.pos"
+        },
+        {
+          "const": "elbow_flex.pos"
+        },
+        {
+          "const": "wrist_flex.pos"
+        },
+        {
+          "const": "wrist_roll.pos"
+        }
+      ],
+      "items": false,
+      "minItems": 5,
+      "maxItems": 5
+    },
+    "geometry_mm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "shoulder_height",
+        "shoulder_radial_offset",
+        "shoulder_lateral_offset",
+        "upper_arm",
+        "forearm",
+        "tool_forward",
+        "tool_normal"
+      ],
+      "properties": {
+        "shoulder_height": {
+          "type": "number"
+        },
+        "shoulder_radial_offset": {
+          "type": "number"
+        },
+        "shoulder_lateral_offset": {
+          "type": "number"
+        },
+        "upper_arm": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "forearm": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "tool_forward": {
+          "type": "number",
+          "minimum": 0
+        },
+        "tool_normal": {
+          "type": "number"
+        }
+      }
+    },
+    "joint_mapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "directions",
+        "zero_offsets_deg",
+        "soft_limits_deg"
+      ],
+      "properties": {
+        "directions": {
+          "type": "array",
+          "items": {
+            "enum": [
+              -1,
+              1
+            ]
+          },
+          "minItems": 5,
+          "maxItems": 5
+        },
+        "zero_offsets_deg": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 5,
+          "maxItems": 5
+        },
+        "soft_limits_deg": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "minItems": 5,
+          "maxItems": 5
+        }
+      }
+    },
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "fit_samples",
+        "holdout_samples",
+        "holdout_xy_rms_mm",
+        "holdout_xy_max_mm",
+        "holdout_z_max_abs_mm"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "provisional",
+            "accepted",
+            "rejected"
+          ]
+        },
+        "fit_samples": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "holdout_samples": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "holdout_xy_rms_mm": {
+          "type": "number",
+          "minimum": 0
+        },
+        "holdout_xy_max_mm": {
+          "type": "number",
+          "minimum": 0
+        },
+        "holdout_z_max_abs_mm": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "evidence_sha256": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      },
+      "minItems": 1
+    }
+  }
+}

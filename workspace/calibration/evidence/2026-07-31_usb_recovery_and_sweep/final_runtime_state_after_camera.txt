@@ -1,0 +1,16 @@
+captured_at=2026-07-31T21:06:12+08:00
+full_selfcheck=True
+gui=active
+supervisor=inactive
+magnet_safe=active
+arm_node=/dev/ttyACM0
+camera_node=/dev/video0
+motion_lock=absent_operator_removed
+holders=
+usb_errors=0
+836585fa451956f72e12e25747c8e13d8377ddd0e007a0566996a6c9f986b7dd  /opt/epuzzle/workspace/src/control/motion_controller.py
+1693f1e24c063e683491df3af46f3da9fe93aeb071eb22977df4252d7b82b387  /opt/epuzzle/workspace/src/integration/park_sequence.py
+c34b0866e2229a2ffb43ce64c627aca155991afa4b607c5252558e1b2f642380  /opt/epuzzle/workspace/tools/supervisor_run.py
+be17bcbe96c47dfee767532870bd8b48adb91cbcb8e8b39a57571469cbee8348  /opt/epuzzle/workspace/tools/detect_red_pieces.py
+d96d19a85f8db64efd9ad04bb4185eb5251317fdc0218c7b7ebab7500bbdde7d  /usr/local/sbin/epuzzle-selfcheck
+5791839694d9c9b7884f71cbfd2b2b6113a11be64b5d569cda1f7a2790b2fe49  /etc/udev/rules.d/70-epuzzle-devices.rules

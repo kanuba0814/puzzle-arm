@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PieceObservation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["piece_id", "timestamp_ns", "source_image_id", "frame", "measured_contour", "polygon_table_mm", "pick_point_table_mm", "pick_clearance_mm", "center_table_mm", "yaw_deg", "equivalent_yaws_deg", "confidence", "diagnostics"],
+  "properties": {
+    "piece_id": {"type": "string", "minLength": 1},
+    "timestamp_ns": {"type": "integer", "minimum": 0},
+    "source_image_id": {"type": "string", "minLength": 1},
+    "frame": {"const": "table_mm", "description": "毫米字段的 frame；不能用于像素轮廓。"},
+    "measured_contour": {"$ref": "#/$defs/measuredContour"},
+    "polygon_table_mm": {"type": "array", "minItems": 3, "maxItems": 5, "items": {"$ref": "#/$defs/point2"}, "description": "由物理轮廓拟合的求解虚拟几何。"},
+    "pick_point_table_mm": {"anyOf": [{"$ref": "#/$defs/point2"}, {"type": "null"}]},
+    "pick_clearance_mm": {"type": ["number", "null"], "minimum": 0},
+    "center_table_mm": {"$ref": "#/$defs/point2"},
+    "yaw_deg": {"type": "number", "minimum": -180, "exclusiveMaximum": 180},
+    "equivalent_yaws_deg": {"type": "array", "items": {"type": "number", "minimum": -180, "exclusiveMaximum": 180}},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "diagnostics": {"$ref": "#/$defs/diagnostics"}
+  },
+  "$defs": {
+    "point2": {"type": "array", "prefixItems": [{"type": "number"}, {"type": "number"}], "items": false, "minItems": 2, "maxItems": 2},
+    "measuredContour": {"type": "object", "additionalProperties": false, "required": ["frame", "points"], "properties": {"frame": {"enum": ["image_px", "rectified_px"]}, "points": {"type": "array", "minItems": 3, "items": {"$ref": "#/$defs/point2"}}}},
+    "diagnostics": {"type": "object", "additionalProperties": false, "required": ["segmentation_stability", "polygon_fit_residual_mm", "pick_clearance_ok", "rounded_corner_candidates", "geometry_source", "touches_frame_border", "extra"], "properties": {"segmentation_stability": {"type": "number", "minimum": 0, "maximum": 1}, "polygon_fit_residual_mm": {"type": "number", "minimum": 0}, "pick_clearance_ok": {"type": ["boolean", "null"]}, "rounded_corner_candidates": {"type": "integer", "minimum": 0}, "geometry_source": {"enum": ["fitted_polygon", "virtual_corner_polygon", "legacy_min_area_rect"]}, "touches_frame_border": {"type": "boolean"}, "error_code": {"type": ["string", "null"]}, "extra": {"type": "object"}}}
+  }
+}

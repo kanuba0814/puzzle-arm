@@ -1,0 +1,5 @@
+47124d755f7ea42186fba0f2caf2201d5317e39ebf13bb9c2a95ada870e4cf94  /etc/epuzzle/robot-motion.lock.json
+b36c263165ebab0e48b3ede94acc26d8279145d72529c8c968bd392050915c4e  /opt/epuzzle/workspace/tools/supervisor_run.py
+152c95d83632826d6aadbf22cd9756fe418cdf4995baf046d3b310eb146f9f18  /opt/epuzzle/workspace/apps/pick_place_page.py
+c1b2f4fa32f94cebed982a2e6017e52711a54befcaa9e436ea055e8347760176  /etc/epuzzle/epuzzle.env
+16989ee0138817cfe54596bb07d22f15febe8a98057b2a2bd79636f2dddb05b6  /usr/local/sbin/epuzzle-selfcheck

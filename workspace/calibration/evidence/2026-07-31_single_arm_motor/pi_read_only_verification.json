@@ -1,0 +1,44 @@
+{
+  "timestamp": "2026-07-31",
+  "status": "READ_ONLY_OK",
+  "joint_order": [
+    "shoulder_pan",
+    "shoulder_lift",
+    "elbow_flex",
+    "wrist_flex",
+    "wrist_roll"
+  ],
+  "initial_raw_present_position_after_homing": {
+    "shoulder_pan": 1058,
+    "shoulder_lift": 716,
+    "elbow_flex": 3264,
+    "wrist_flex": 2782,
+    "wrist_roll": 1112
+  },
+  "initial_joint_deg": {
+    "shoulder_pan": -96.65934065934066,
+    "shoulder_lift": -110.50549450549451,
+    "elbow_flex": 96.3956043956044,
+    "wrist_flex": 76.57142857142857,
+    "wrist_roll": -82.24175824175825
+  },
+  "final_raw_after_manual_reposition": {
+    "shoulder_pan": 2123,
+    "shoulder_lift": 761,
+    "elbow_flex": 3265,
+    "wrist_flex": 2782,
+    "wrist_roll": 1110
+  },
+  "final_all_five_within_imported_ranges": true,
+  "calibration_register_readback_matches_file": true,
+  "goal_position_commands_sent": 0,
+  "torque_disabled_before_and_after": true,
+  "supervisor_active": false,
+  "motion_preflight": {
+    "kinematic_calibration": "arm_kinematics_legacy_rejected_20260731.json",
+    "result": "NOT_READY",
+    "exit_code": 2,
+    "reason": "标定状态不是 accepted: rejected; 禁止真实运动"
+  },
+  "note": "Initial shoulder_lift=716 was 7 counts below range_min=723. With torque still disabled, the user manually moved J2 away from the stop; final shoulder_lift=761 and all five joints read within imported ranges."
+}

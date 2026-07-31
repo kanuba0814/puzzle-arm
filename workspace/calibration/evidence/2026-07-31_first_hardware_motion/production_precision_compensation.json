@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "date": "2026-07-31",
+  "test": "loaded_terminal_precision_compensation",
+  "calibration_id": "single-arm-contact-sheet-v2-20260731",
+  "reference_frame": "calibration_sheet_mm",
+  "height_mm": 20.0,
+  "supervisor_active": false,
+  "magnet_enabled": false,
+  "fast_sweep": {
+    "result": "pass",
+    "points": ["A", "B", "D", "N", "M", "E", "F", "G", "P", "O", "H", "I"],
+    "operator_observation": "all points appeared shifted 10-20 mm toward the robot",
+    "diagnosis": "5 degree / one-sample fast-arrival gate accepted points before loaded joints settled"
+  },
+  "d_exact_uncompensated": {
+    "target_sheet_mm": [175.0, 250.0, 20.0],
+    "dwell_s": 8.0,
+    "p_coefficient": 24,
+    "command_pitch_deg": -92.0,
+    "actual_from_encoder_sheet_mm": [170.315386, 245.251347, 14.007317],
+    "actual_pitch_deg": -94.513178,
+    "operator_observation": "still about 3 mm toward the robot"
+  },
+  "d_corrected": {
+    "radial_compensation_away_from_robot_mm": 3.0,
+    "command_pitch_deg": -87.5,
+    "actual_pitch_deg": -90.029661,
+    "repeat_count": 2,
+    "operator_observation": "position and perpendicularity are both normal",
+    "decision": "accept for competition precision terminal mode"
+  },
+  "precision_terminal_mode": {
+    "p_coefficient": 24,
+    "acceleration": 30,
+    "radial_compensation_away_from_robot_mm": 3.0,
+    "command_pitch_deg": -87.5,
+    "expected_loaded_pitch_deg": -90.0
+  },
+  "final_state": {
+    "park_pose": true,
+    "torque_enabled": false,
+    "magnet_enabled": false
+  }
+}

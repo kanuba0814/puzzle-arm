@@ -1,0 +1,159 @@
+{
+  "schema_version": 1,
+  "test": "red_piece_repeat_twice_and_center_sweep",
+  "calibration_id": "single-arm-contact-sheet-v2-20260731",
+  "park_id": "single-arm-formal-park-20260731",
+  "pieces": [
+    {
+      "id": 0,
+      "x": 143.943,
+      "y": 236.592,
+      "angle_deg": -27.775
+    },
+    {
+      "id": 1,
+      "x": 46.592,
+      "y": 206.581,
+      "angle_deg": -81.723
+    },
+    {
+      "id": 2,
+      "x": 89.146,
+      "y": 204.901,
+      "angle_deg": -64.358
+    },
+    {
+      "id": 3,
+      "x": 143.801,
+      "y": 167.279,
+      "angle_deg": 89.97
+    }
+  ],
+  "repeat_piece_id": 0,
+  "repetitions": [
+    {
+      "piece_id": 0,
+      "repetition": 1,
+      "joint_deg": {
+        "shoulder_pan": -30.285714285714285,
+        "shoulder_lift": 30.76923076923077,
+        "elbow_flex": 27.47252747252747,
+        "wrist_flex": 40.7032967032967,
+        "wrist_roll": -81.8021978021978
+      },
+      "fk_table_mm": [
+        140.91378572105955,
+        234.6486518579793,
+        15.008955396243488
+      ],
+      "fk_pitch_deg": -89.85383694505494,
+      "fk_yaw_deg": 29.934066087912072
+    },
+    {
+      "piece_id": 0,
+      "repetition": 2,
+      "joint_deg": {
+        "shoulder_pan": -30.46153846153846,
+        "shoulder_lift": 30.76923076923077,
+        "elbow_flex": 27.208791208791208,
+        "wrist_flex": 40.7032967032967,
+        "wrist_roll": -81.8021978021978
+      },
+      "fk_table_mm": [
+        141.4491148958773,
+        235.61504785629168,
+        15.534935046772674
+      ],
+      "fk_pitch_deg": -89.59010068131869,
+      "fk_yaw_deg": 30.109890263736247
+    }
+  ],
+  "sweep": [
+    {
+      "piece_id": 0,
+      "repetition": 2,
+      "joint_deg": {
+        "shoulder_pan": -30.46153846153846,
+        "shoulder_lift": 30.76923076923077,
+        "elbow_flex": 27.208791208791208,
+        "wrist_flex": 40.7032967032967,
+        "wrist_roll": -81.8021978021978
+      },
+      "fk_table_mm": [
+        141.4491148958773,
+        235.61504785629168,
+        15.534935046772674
+      ],
+      "fk_pitch_deg": -89.59010068131869,
+      "fk_yaw_deg": 30.109890263736247,
+      "order": 1
+    },
+    {
+      "piece_id": 3,
+      "repetition": 1,
+      "joint_deg": {
+        "shoulder_pan": -11.824175824175825,
+        "shoulder_lift": 23.736263736263737,
+        "elbow_flex": 39.956043956043956,
+        "wrist_flex": 34.285714285714285,
+        "wrist_roll": -81.8021978021978
+      },
+      "fk_table_mm": [
+        142.95720595299525,
+        168.99870938936348,
+        17.510941205240446
+      ],
+      "fk_pitch_deg": -88.88680397802199,
+      "fk_yaw_deg": 11.47252762637362,
+      "order": 2
+    },
+    {
+      "piece_id": 2,
+      "repetition": 1,
+      "joint_deg": {
+        "shoulder_pan": -28.87912087912088,
+        "shoulder_lift": 10.813186813186814,
+        "elbow_flex": 64.13186813186813,
+        "wrist_flex": 22.153846153846153,
+        "wrist_roll": -82.5934065934066
+      },
+      "fk_table_mm": [
+        90.61701636645884,
+        206.21675585279723,
+        19.657198249683
+      ],
+      "fk_pitch_deg": -88.0076830989011,
+      "fk_yaw_deg": 29.318681472527487,
+      "order": 3
+    },
+    {
+      "piece_id": 1,
+      "repetition": 1,
+      "joint_deg": {
+        "shoulder_pan": -38.46153846153846,
+        "shoulder_lift": 1.5824175824175823,
+        "elbow_flex": 82.76923076923077,
+        "wrist_flex": 12.835164835164836,
+        "wrist_roll": -82.50549450549451
+      },
+      "fk_table_mm": [
+        47.92398738685351,
+        207.27748970347366,
+        19.642861577670136
+      ],
+      "fk_pitch_deg": -88.0955951868132,
+      "fk_yaw_deg": 38.813186967032976,
+      "order": 4
+    }
+  ],
+  "magnet_enabled": false,
+  "result": "PASS",
+  "final_joint_deg": {
+    "shoulder_pan": -94.98901098901099,
+    "shoulder_lift": -100.13186813186813,
+    "elbow_flex": 94.98901098901099,
+    "wrist_flex": 79.73626373626374,
+    "wrist_roll": -82.50549450549451
+  },
+  "torque_disabled_after_test": true
+}

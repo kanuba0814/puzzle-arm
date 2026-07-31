@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "robot_motion_lock.schema.json",
+  "title": "RobotMotionLock",
+  "description": "真实硬件事件后的持久运动锁。文件存在即锁定；不得仅因设备节点重新出现而自动清除。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "locked",
+    "reason",
+    "incident_time",
+    "evidence_path",
+    "clear_requires"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "locked": {
+      "const": true
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "incident_time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "evidence_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "clear_requires": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

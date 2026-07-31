@@ -1,0 +1,25 @@
+[Unit]
+Description=E Puzzle magnet fail-safe off
+DefaultDependencies=no
+After=local-fs.target
+Before=epuzzle.target shutdown.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/lib/epuzzle/magnet-off.py
+ExecStop=/usr/local/lib/epuzzle/magnet-off.py
+RemainAfterExit=yes
+User=root
+Group=root
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+
+[Install]
+WantedBy=multi-user.target

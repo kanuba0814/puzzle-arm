@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "operation": "read_only_final_park_torque_verification",
+  "torque_enable": {
+    "shoulder_pan": 0,
+    "shoulder_lift": 0,
+    "elbow_flex": 0,
+    "wrist_flex": 0,
+    "wrist_roll": 0
+  },
+  "all_torque_disabled": true,
+  "actual_joint_deg": {
+    "shoulder_pan": -95.07692307692308,
+    "shoulder_lift": -100.74725274725274,
+    "elbow_flex": 98.15384615384616,
+    "wrist_flex": 79.82417582417582,
+    "wrist_roll": -82.50549450549451
+  },
+  "park_expected_joint_deg": {
+    "shoulder_pan": -95.428571,
+    "shoulder_lift": -100.131868,
+    "elbow_flex": 94.637363,
+    "wrist_flex": 79.296703,
+    "wrist_roll": -81.978022
+  },
+  "park_error_deg": {
+    "shoulder_pan": 0.35164792307692494,
+    "shoulder_lift": -0.6153847472527474,
+    "elbow_flex": 3.516483153846167,
+    "wrist_flex": 0.5274728241758311,
+    "wrist_roll": -0.5274725054945151
+  },
+  "max_abs_park_error_deg": 3.516483153846167,
+  "park_tolerance_deg": 4.0,
+  "at_park": true,
+  "writes_sent": 0,
+  "goal_position_commands_sent": 0,
+  "torque_enable_commands_sent": 0,
+  "magnet_activated": false
+}
