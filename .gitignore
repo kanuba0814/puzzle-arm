@@ -29,3 +29,11 @@ venv/
 .vscode/
 .idea/
 .DS_Store
+
+# Pi ~/puzzle 镜像产物 (可随时从 Pi rsync 重建)
+pi_puzzle/out/
+pi_puzzle/debug_imgs/
+pi_puzzle/__pycache__/
+pi_puzzle/workspace/runtime/
+pi_puzzle/workspace/logs/
+official_docs/lerobot_v0.6.0/

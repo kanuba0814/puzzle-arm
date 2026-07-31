@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "park_id": "single-arm-formal-park-20260731",
+  "captured_at": "2026-07-31T15:04:02+08:00",
+  "robot_type": "so101_follower_5d",
+  "source_arm": "so101_follower_modified_single_arm",
+  "joint_features": [
+    "shoulder_pan.pos",
+    "shoulder_lift.pos",
+    "elbow_flex.pos",
+    "wrist_flex.pos",
+    "wrist_roll.pos"
+  ],
+  "raw_present_position": {
+    "shoulder_pan": 1072,
+    "shoulder_lift": 834,
+    "elbow_flex": 3244,
+    "wrist_flex": 2813,
+    "wrist_roll": 1115
+  },
+  "joint_deg": {
+    "shoulder_pan": -95.428571,
+    "shoulder_lift": -100.131868,
+    "elbow_flex": 94.637363,
+    "wrist_flex": 79.296703,
+    "wrist_roll": -81.978022
+  },
+  "sample_count": 5,
+  "torque_enable": {
+    "shoulder_pan": 0,
+    "shoulder_lift": 0,
+    "elbow_flex": 0,
+    "wrist_flex": 0,
+    "wrist_roll": 0
+  },
+  "goal_position_commands_sent": 0,
+  "motor_calibration_sha256": "89ea5079eb9bb35012866d736d0438d419ee57c201e51e11a61530e3e6440ca8",
+  "kinematic_calibration_sha256": "c207bae180e187b6c639cc848320195dafce1f468920a0f2eba7f00c621eab38",
+  "note": "Independent supported PARK pose; may lie outside ordinary Cartesian soft limits."
+}

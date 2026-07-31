@@ -1,0 +1,14 @@
+opencv-python>=4.8.0
+numpy>=1.24.0
+# scservo (Feetech官方舵机SDK): PyPI名 feetech-servo-sdk, 本项目已内置
+# 纯Python拷贝于 sdks/offline/scservo_sdk/ (源码同 lerobot 环境);
+# 树莓派离线安装用 tools/setup_pi.sh, 无需联网
+pyserial>=3.5
+
+# 树莓派额外依赖(部署时安装, 均已在 sdks/offline/wheels 备好):
+# gpiozero  (Pi 5 GPIO: 电磁铁+LED+蜂鸣器; 注意经典 RPi.GPIO 在 Pi 5 不可用)
+# lgpio     (Pi 5 GPIO后端, 只能系统apt装: python3-lgpio, Pi OS已预装)
+
+# Astra S 相机不再需要 openni Python 包 (有内存崩溃 bug),
+# 改用 C++ 桥接: bash tools/build_bridge.sh
+# picamera2 (如使用Pi摄像头)

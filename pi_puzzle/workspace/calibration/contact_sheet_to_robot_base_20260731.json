@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "transform_id": "contact-sheet-to-robot-base-20260731",
+  "from_frame": "calibration_sheet_mm",
+  "to_frame": "robot_base_mm",
+  "translation_unit": "mm",
+  "rotation_unit": "degree",
+  "yaw_deg": 4.43177,
+  "translation_mm": [
+    55.888937,
+    -140.734659,
+    -25.237852
+  ],
+  "inverse_sheet_from_robot": {
+    "yaw_deg": -4.43177,
+    "translation_mm": [
+      -44.847003,
+      144.632513,
+      25.237852
+    ]
+  },
+  "evidence_sha256": [
+    "11bf8221865f96242963d58e5af839eb78249ed481c7e0ca829abb5cabb433d4",
+    "8027f251173f1a391ca05cc5fc8f7c2396c17216dea3e8aaf4989c163be3ba75",
+    "89ea5079eb9bb35012866d736d0438d419ee57c201e51e11a61530e3e6440ca8",
+    "4dde6b01477ffe87f308f8441a18220661d92f5e128f00b237e8b24efd1dd36f"
+  ]
+}

@@ -1,0 +1,655 @@
+# pyright: reportMissingImports=false
+# ruff: noqa: I001
+"""
+机械臂控制 GUI — 无桌面环境版 (pygame / SDL2, 树莓派纯 tty 直显)
+
+适用场景: 树莓派 OS Lite 没有 X11/桌面, 只有 tty。本程序通过 SDL2 的
+kmsdrm 驱动直接渲染到屏幕 (不依赖 X, 不依赖桌面环境), 鼠标/触摸走 evdev。
+
+界面结构 (二级菜单, 适配 800x480 小屏):
+    主菜单          : 状态栏 + 三个大入口 (自动控制 / 手动控制 / 系统日志)
+    ├─ 自动控制     : 一键标定 / 任务1·2 选择 / 开始检测搬运 / 中止 / 进度条
+    ├─ 手动控制     : Tab[关节] J1-J5 步进 + 力矩使能失能 + 电磁铁 + Home
+    │                Tab[末端] XYZ 步进
+    └─ 系统日志     : 全屏日志 + 清空
+    常驻            : 顶部状态栏 (连接/模式/力矩/电磁铁/标定/任务 + 关节角),
+                     右上角红色 [急停] 按钮任何页面可点, ESC 退出
+
+树莓派上运行:
+    pip install pygame-ce          # 有 aarch64 官方 wheel, Lite 直接装
+    python3 gui_fb.py              # 自动选 kmsdrm; 失败时回退窗口模式
+    bash tools/start_gui_fb.sh     # 部署用启动脚本
+
+开发机 (有桌面) 上调试:
+    python3 gui_fb.py              # 自动用 x11/wayland 窗口模式
+    python3 gui_fb.py --window 800x480   # 强制窗口 + 指定分辨率
+
+中文字体: 自动搜索系统 CJK 字体 (Noto/WenQuanYi/Droid);
+树莓派 Lite 若无中文字体: sudo apt install fonts-wqy-zenhei,
+或把 ttf/ttc 放到项目 fonts/ 目录。
+
+当前为 Mock 后端纯界面演示, 无实际硬件功能 (接口见 gui_backend.py)。
+"""
+from __future__ import annotations
+
+import math
+import os
+import queue
+import sys
+from pathlib import Path
+
+# ---- 在 import pygame 前决定视频驱动 ----
+# 无 DISPLAY 环境 = 树莓派纯 tty -> kmsdrm 直显; 有桌面 -> 走桌面窗口
+if not os.environ.get('DISPLAY') and not os.environ.get('WAYLAND_DISPLAY') \
+        and '--window' not in sys.argv:
+    os.environ.setdefault('SDL_VIDEODRIVER', 'kmsdrm')
+    os.environ.setdefault('SDL_NOMOUSE', '0')
+
+# SDL 对触摸生成的兼容鼠标事件在 kmsdrm 下并不稳定。关闭隐式合成，
+# 在事件循环中统一完成坐标换算，避免触摸有点击但光标不移动。
+os.environ.setdefault('SDL_TOUCH_MOUSE_EVENTS', '0')
+
+import pygame  # noqa: E402
+
+from gui_backend import RobotState, create_backend  # noqa: E402
+
+# ==================== 主题 ====================
+C_BG = (24, 26, 32)
+C_PANEL = (36, 39, 48)
+C_BTN = (62, 68, 84)
+C_BTN_PRESS = (90, 98, 120)
+C_TEXT = (232, 234, 240)
+C_DIM = (150, 155, 168)
+C_GREEN = (46, 160, 90)
+C_RED = (200, 60, 60)
+C_RED_DARK = (150, 40, 40)
+C_ORANGE = (210, 140, 40)
+C_BLUE = (60, 130, 200)
+C_LINE = (70, 75, 92)
+C_TAB = (48, 52, 64)
+C_TAB_ON = (62, 68, 84)
+
+STATE_LABELS = {
+    'IDLE': '空闲', 'CALIBRATING': '标定中', 'DETECTING': '检测中',
+    'SOLVING': '求解中', 'EXECUTING': '执行中', 'DONE': '完成', 'ERROR': '错误',
+}
+
+FONT_CANDIDATES = [
+    'fonts/NotoSansCJK-Regular.ttc',
+    '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+    '/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc',
+    '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc',
+    '/usr/share/fonts/truetype/arphic/uming.ttc',
+    '/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf',
+]
+
+
+def find_font() -> str | None:
+    for path in FONT_CANDIDATES:
+        if Path(path).is_file():
+            return path
+    return None
+
+
+def load_font(font_path, size):
+    fallback_size = round(size * 1.3)
+    return pygame.font.Font(font_path, size) if font_path \
+        else pygame.font.Font(None, fallback_size)
+
+
+def touch_event_to_mouse_event(event, screen_size):
+    """将 SDL 归一化触摸坐标转换成现有控件使用的鼠标事件。"""
+    event_types = {
+        pygame.FINGERDOWN: pygame.MOUSEBUTTONDOWN,
+        pygame.FINGERMOTION: pygame.MOUSEMOTION,
+        pygame.FINGERUP: pygame.MOUSEBUTTONUP,
+    }
+    if event.type not in event_types:
+        return event
+
+    width, height = screen_size
+    pos = (
+        max(0, min(width - 1, math.floor(event.x * width))),
+        max(0, min(height - 1, math.floor(event.y * height))),
+    )
+    attributes = {'pos': pos, 'touch': True}
+    if event.type == pygame.FINGERMOTION:
+        attributes.update({
+            'rel': (round(event.dx * width), round(event.dy * height)),
+            'buttons': (1, 0, 0),
+        })
+    else:
+        attributes['button'] = 1
+    return pygame.event.Event(event_types[event.type], attributes)
+
+
+# ==================== 控件 ====================
+
+class Button:
+    def __init__(self, rect, text, on_click, color=C_BTN, text_color=C_TEXT,
+                 font_key='btn'):
+        self.rect = pygame.Rect(rect)
+        self.text = text
+        self.on_click = on_click
+        self.color = color
+        self.text_color = text_color
+        self.font_key = font_key
+        self.pressed = False
+        self._tab: str | None = None
+
+    def handle(self, ev) -> bool:
+        if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1 \
+                and self.rect.collidepoint(ev.pos):
+            self.pressed = True
+            return True
+        if ev.type == pygame.MOUSEBUTTONUP and ev.button == 1 and self.pressed:
+            self.pressed = False
+            if self.rect.collidepoint(ev.pos):
+                self.on_click()
+            return True
+        return False
+
+    def draw(self, surf, fonts):
+        pygame.draw.rect(surf, C_BTN_PRESS if self.pressed else self.color,
+                         self.rect, border_radius=8)
+        pygame.draw.rect(surf, C_LINE, self.rect, width=1, border_radius=8)
+        f = fonts[self.font_key]
+        img = f.render(self.text, True, self.text_color)
+        surf.blit(img, img.get_rect(center=self.rect.center))
+
+
+class Radio:
+    """单选组: options=[(文本, 值)], get()/set(v) 读写当前值"""
+    def __init__(self, x, y, options, get, set_, font_key='small', box=20,
+                 gap=10):
+        self.x, self.y = x, y
+        self.options = options
+        self.get, self.set = get, set_
+        self.font_key, self.box, self.gap = font_key, box, gap
+        self.rects = []
+        self._tab: str | None = None
+
+    def layout(self, fonts):
+        self.rects = []
+        cx = self.x
+        for text, _ in self.options:
+            w = self.box + 8 + fonts[self.font_key].size(text)[0] + self.gap
+            self.rects.append(pygame.Rect(cx, self.y, w, self.box))
+            cx += w
+
+    def handle(self, ev) -> bool:
+        if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
+            for rect, (_, val) in zip(self.rects, self.options, strict=True):
+                if rect.collidepoint(ev.pos):
+                    self.set(val)
+                    return True
+        return False
+
+    def draw(self, surf, fonts):
+        cur = self.get()
+        for rect, (text, val) in zip(self.rects, self.options, strict=True):
+            cx, cy = rect.x + self.box // 2, rect.y + self.box // 2
+            pygame.draw.circle(surf, C_TEXT, (cx, cy), self.box // 2, width=2)
+            if val == cur:
+                pygame.draw.circle(surf, C_GREEN, (cx, cy), self.box // 2 - 6)
+            img = fonts[self.font_key].render(text, True, C_TEXT)
+            surf.blit(img, (rect.x + self.box + 8,
+                            rect.y + self.box // 2 - img.get_height() // 2))
+
+
+# ==================== 主界面 ====================
+
+class FbGUI:
+    def __init__(self, win_size=None):
+        pygame.init()
+        if win_size:
+            self.screen = pygame.display.set_mode(win_size)
+        elif os.environ.get('SDL_VIDEODRIVER') == 'kmsdrm':
+            self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+        else:
+            self.screen = pygame.display.set_mode((960, 600), pygame.RESIZABLE)
+        pygame.display.set_caption('拼图机械臂控制台')
+        self.W, self.H = self.screen.get_size()
+
+        font_path = find_font()
+        if font_path is None:
+            print('[GUI] 未找到中文字体, 中文将显示为方块! '
+                  '树莓派: sudo apt install fonts-wqy-zenhei')
+        base = max(16, self.H // 30)
+        self.fonts = {
+            'title': load_font(font_path, base + 8),
+            'btn': load_font(font_path, base + 2),
+            'small': load_font(font_path, base - 2),
+            'log': load_font(font_path, base - 3),
+        }
+
+        self.backend = create_backend()
+        self._q = queue.Queue()
+        self.backend.set_callbacks(
+            on_log=lambda level, message: self._q.put(
+                ('log', level, message)),
+            on_state=lambda s: self._q.put(('state', s)),
+            on_progress=lambda s, f: self._q.put(('progress', s, f)),
+            on_task_done=lambda ok, m: self._q.put(('done', ok, m)),
+        )
+
+        self.state = RobotState()
+        self.logs = []
+        self.progress = 0.0
+        self.progress_stage = '-'
+        self.task_mode = 'task1'
+        self.joint_step = 5.0
+        self.xyz_step = 10.0
+
+        # 页面: main / auto / manual / log; 手动页内 tab: joint / xyz
+        self.page = 'main'
+        self.manual_tab = 'joint'
+
+        # 每页的控件: {page: {'buttons': [...], 'radios': [...], 'draw': fn}}
+        self.pages = {}
+        self._build_all()
+
+        ok, msg = self.backend.connect()
+        self._log('INFO' if ok else 'ERROR', f'后端连接: {msg}')
+
+    # ---------- 布局 ----------
+    def _build_all(self):
+        W, H = self.W, self.H
+        m = 10
+        self.rect_status = pygame.Rect(m, m, W - m * 2, max(50, H // 11))
+        self.rect_body = pygame.Rect(m, self.rect_status.bottom + m,
+                                     W - m * 2, H - self.rect_status.height - m * 3)
+        # 急停常驻 (状态栏右上角)
+        self.btn_estop = Button(
+            (self.rect_status.right - 104, self.rect_status.y + 7, 96,
+             self.rect_status.h - 14),
+            '急停', self.backend.emergency_stop, color=C_RED, font_key='btn')
+        self.pages = {
+            'main': self._build_main(),
+            'auto': self._build_auto(),
+            'manual': self._build_manual(),
+            'log': self._build_log(),
+        }
+
+    def _back_btn(self):
+        return Button((self.rect_body.right - 100, self.rect_body.y + 6, 92, 40),
+                      '← 返回', lambda: self._goto('main'))
+
+    def _goto(self, page):
+        self.page = page
+        # 切页时释放所有按钮按压态
+        for p in self.pages.values():
+            for b in p['buttons']:
+                b.pressed = False
+
+    def _build_main(self):
+        r = self.rect_body
+        bw = r.w - 80
+        bh = (r.h - 60) // 3
+        x = r.x + 40
+        y = r.y + 16
+        buttons = [
+            Button((x, y, bw, bh), '自动控制', lambda: self._goto('auto'),
+                   color=C_BLUE, font_key='title'),
+            Button((x, y + bh + 14, bw, bh), '手动控制',
+                   lambda: self._goto('manual'), color=C_BTN, font_key='title'),
+            Button((x, y + (bh + 14) * 2, bw, bh), '系统日志',
+                   lambda: self._goto('log'), color=C_BTN, font_key='title'),
+        ]
+        return {'buttons': buttons, 'radios': [], 'draw': self._draw_main}
+
+    def _build_auto(self):
+        r = self.rect_body
+        bw = min(420, r.w - 60)
+        bh = max(46, (r.h - 150) // 5)
+        x = r.x + 30
+        y = r.y + 16
+        buttons = [
+            self._back_btn(),
+            Button((x, y, bw, bh), '① 一键标定', self._on_calibrate,
+                   color=C_BLUE),
+        ]
+        y += bh + 12
+        radios = [Radio(x, y + 8, [('任务1 纯色', 'task1'),
+                                   ('任务2 扑克牌', 'task2')],
+                        lambda: self.task_mode,
+                        lambda v: setattr(self, 'task_mode', v),
+                        font_key='btn', box=24)]
+        y += 46
+        buttons.append(Button((x, y, bw, bh), '② 开始检测搬运',
+                              self._on_start, color=C_GREEN))
+        y += bh + 12
+        buttons.append(Button((x, y, bw, max(38, bh - 10)), '中止任务',
+                              self.backend.abort))
+        self.rect_progress = pygame.Rect(x, r.bottom - 46, bw, 18)
+        for rd in radios:
+            rd.layout(self.fonts)
+        return {'buttons': buttons, 'radios': radios, 'draw': self._draw_auto}
+
+    def _build_manual(self):
+        r = self.rect_body
+        x = r.x + 24
+        w = r.w - 48
+        y = r.y + 56   # 顶部留给返回按钮
+        half = (w - 12) // 2
+        bh = max(42, (r.h - 220) // 6)
+        buttons = [
+            self._back_btn(),
+            Button((x, y, half, bh), '力矩使能',
+                   lambda: self.backend.set_torque(True), color=C_GREEN),
+            Button((x + half + 12, y, half, bh), '力矩失能',
+                   lambda: self.backend.set_torque(False), color=C_ORANGE),
+        ]
+        y += bh + 10
+        buttons += [
+            Button((x, y, half, bh), '电磁铁 吸',
+                   lambda: self.backend.set_magnet(True)),
+            Button((x + half + 12, y, half, bh), '电磁铁 放',
+                   lambda: self.backend.set_magnet(False)),
+        ]
+        y += bh + 10
+        buttons.append(Button((x, y, w, bh), '回初始位置 (Home)',
+                              self.backend.home))
+        y += bh + 14
+        # --- Tab 栏: 关节 | 末端 ---
+        tab_w = half
+        self.rect_tabs = {
+            'joint': pygame.Rect(x, y, tab_w, 44),
+            'xyz': pygame.Rect(x + tab_w + 12, y, tab_w, 44),
+        }
+        tab_y = y + 44 + 16
+
+        # --- Tab[关节]: 步长 radio + J1..J5 两行排布 ---
+        radios = [Radio(x, tab_y + 4,
+                        [(f'{step:g}°', step) for step in (1.0, 5.0, 10.0, 30.0)],
+                        lambda: self.joint_step,
+                        lambda v: setattr(self, 'joint_step', v)),
+                  Radio(x, tab_y + 4,
+                        [(f'{step:g}mm', step) for step in (1.0, 5.0, 10.0, 50.0)],
+                        lambda: self.xyz_step,
+                        lambda v: setattr(self, 'xyz_step', v))]
+        radios[0]._tab = 'joint'
+        radios[1]._tab = 'xyz'
+        row_h = max(40, (r.bottom - tab_y - 60) // 3)
+        jy = tab_y + 40
+        bw2 = 64
+        # J1-J3 第一行, J4-J5 第二行
+        self._joint_rows = []
+        per_row = 3
+        for j in range(5):
+            row, col = j // per_row, j % per_row
+            cell_w = (w - 12 * (per_row - 1)) // per_row
+            cx = x + col * (cell_w + 12)
+            cy = jy + row * (row_h + 12)
+            minus = Button((cx, cy, bw2, row_h), '−',
+                           lambda j=j: self._jog(j, -1), font_key='title')
+            plus = Button((cx + bw2 + 6, cy, bw2, row_h), '+',
+                          lambda j=j: self._jog(j, +1), font_key='title')
+            minus._tab = plus._tab = 'joint'
+            buttons += [minus, plus]
+            self._joint_rows.append((j, pygame.Rect(cx + bw2 * 2 + 14, cy,
+                                                    cell_w - bw2 * 2 - 14,
+                                                    row_h)))
+        # --- Tab[末端]: XYZ 3x2 大按钮 ---
+        cell_w = (w - 24) // 3
+        xyz_h = max(48, (r.bottom - tab_y - 60) // 2)
+        for i, (t, ax, sg) in enumerate([('X−', 'x', -1), ('X+', 'x', 1),
+                                         ('Y−', 'y', -1), ('Y+', 'y', 1),
+                                         ('Z−', 'z', -1), ('Z+', 'z', 1)]):
+            b = Button((x + (i % 3) * (cell_w + 12),
+                        jy + (i // 3) * (xyz_h + 14), cell_w, xyz_h), t,
+                       lambda a=ax, s=sg: self._jog_xyz(a, s),
+                       font_key='title')
+            b._tab = 'xyz'
+            buttons.append(b)
+        for rd in radios:
+            rd.layout(self.fonts)
+        return {'buttons': buttons, 'radios': radios,
+                'draw': self._draw_manual}
+
+    def _build_log(self):
+        r = self.rect_body
+        buttons = [
+            self._back_btn(),
+            Button((r.right - 204, r.y + 6, 92, 40), '清空', self._clear_log),
+        ]
+        return {'buttons': buttons, 'radios': [], 'draw': self._draw_log_page}
+
+    # ---------- 动作 ----------
+    def _jog(self, j, sign):
+        ok, msg = self.backend.jog_joint(j, sign * self.joint_step)
+        if not ok:
+            self._log('ERROR', msg)
+
+    def _jog_xyz(self, axis, sign):
+        d = sign * self.xyz_step
+        self.backend.jog_xyz(*{'x': (d, 0, 0), 'y': (0, d, 0),
+                               'z': (0, 0, d)}[axis])
+
+    def _on_calibrate(self):
+        self.progress = 0.0
+        self.backend.calibrate()
+
+    def _on_start(self):
+        ok, msg = self.backend.start_task(self.task_mode)
+        self._log('INFO' if ok else 'WARN', msg)
+
+    # ---------- 日志 ----------
+    def _log(self, level, msg):
+        self.logs.append((level, msg))
+        if len(self.logs) > 300:
+            self.logs = self.logs[-300:]
+
+    def _clear_log(self):
+        self.logs.clear()
+
+    # ---------- 渲染 ----------
+    def _panel(self, rect, title=''):
+        pygame.draw.rect(self.screen, C_PANEL, rect, border_radius=10)
+        pygame.draw.rect(self.screen, C_LINE, rect, width=1, border_radius=10)
+        if title:
+            img = self.fonts['btn'].render(title, True, C_DIM)
+            self.screen.blit(img, (rect.x + 16, rect.y + 10))
+
+    def _draw_status(self):
+        r = self.rect_status
+        self._panel(r)
+        st = self.state
+        items = [
+            ('连接', '已连接' if st.connected else '未连接',
+             C_GREEN if st.connected else C_RED),
+            ('模式', '模拟' if st.simulation else '硬件',
+             C_ORANGE if st.simulation else C_GREEN),
+            ('力矩', '使能' if st.torque_enabled else '失能',
+             C_GREEN if st.torque_enabled else C_DIM),
+            ('电磁铁', '吸合' if st.magnet_on else '释放',
+             C_GREEN if st.magnet_on else C_DIM),
+            ('标定', '已标定' if st.calibrated else '未标定',
+             C_GREEN if st.calibrated else C_DIM),
+            ('任务', STATE_LABELS.get(st.task_state, st.task_state),
+             C_BLUE if st.task_state != 'IDLE' else C_TEXT),
+        ]
+        f = self.fonts['small']
+        x = r.x + 16
+        y = r.y + r.h // 2 - f.get_height() // 2
+        for label, val, color in items:
+            img = f.render(f'{label}: ', True, C_DIM)
+            self.screen.blit(img, (x, y))
+            x += img.get_width()
+            img = f.render(val, True, color)
+            self.screen.blit(img, (x, y))
+            x += img.get_width() + 18
+        joints = ' '.join(f'J{j+1} {d:.0f}°'
+                          for j, d in enumerate(st.joints_deg))
+        img = f.render(joints, True, C_TEXT)
+        jx = self.btn_estop.rect.x - img.get_width() - 16
+        if jx > x + 8:   # 空间不足时不画, 防止与状态项重叠
+            self.screen.blit(img, (jx, y))
+
+    def _draw_main(self):
+        # 主菜单附加信息: 最近日志一行
+        if self.logs:
+            level, msg = self.logs[-1]
+            colors = {'INFO': C_DIM, 'WARN': C_ORANGE, 'ERROR': C_RED}
+            img = self.fonts['small'].render(f'[{level}] {msg}', True,
+                                             colors.get(level, C_DIM))
+            r = self.rect_body
+            self.screen.blit(img, (r.x + 40, r.bottom - img.get_height() - 8))
+
+    def _draw_auto(self):
+        pr = self.rect_progress
+        img = self.fonts['small'].render(
+            f'进度: {self.progress_stage} {self.progress*100:.0f}%', True, C_DIM)
+        self.screen.blit(img, (pr.x, pr.y - img.get_height() - 6))
+        pygame.draw.rect(self.screen, C_BG, pr, border_radius=6)
+        if self.progress > 0:
+            fill = pr.copy()
+            fill.width = round(pr.w * min(1.0, self.progress))
+            pygame.draw.rect(self.screen, C_GREEN, fill, border_radius=6)
+        pygame.draw.rect(self.screen, C_LINE, pr, width=1, border_radius=6)
+
+    def _draw_manual(self):
+        # Tab 栏
+        for key, rect in self.rect_tabs.items():
+            on = self.manual_tab == key
+            pygame.draw.rect(self.screen, C_TAB_ON if on else C_TAB, rect,
+                             border_radius=8)
+            pygame.draw.rect(self.screen, C_LINE, rect, width=1,
+                             border_radius=8)
+            img = self.fonts['btn'].render(
+                '关节步进' if key == 'joint' else '末端步进', True,
+                C_TEXT if on else C_DIM)
+            self.screen.blit(img, img.get_rect(center=rect.center))
+        # 关节读数 (仅 joint tab)
+        if self.manual_tab == 'joint':
+            f = self.fonts['small']
+            for j, rect in self._joint_rows:
+                deg = self.state.joints_deg[j] \
+                    if j < len(self.state.joints_deg) else 0
+                img = f.render(f'J{j+1} {deg:+.1f}°', True, C_TEXT)
+                self.screen.blit(img, (rect.x + 6,
+                                       rect.centery - img.get_height() // 2))
+
+    def _draw_log_page(self):
+        r = self.rect_body
+        f = self.fonts['log']
+        lh = f.get_height() + 3
+        n = (r.h - 60) // lh
+        colors = {'INFO': C_TEXT, 'WARN': C_ORANGE, 'ERROR': C_RED}
+        y = r.bottom - 10 - lh
+        for level, msg in reversed(self.logs[-n:]):
+            img = f.render(f'[{level}] {msg}', True, colors.get(level, C_TEXT))
+            self.screen.blit(img, (r.x + 16, y))
+            y -= lh
+
+    def _visible_widgets(self):
+        p = self.pages[self.page]
+        buttons = list(p['buttons'])
+        radios = list(p['radios'])
+        if self.page == 'manual':
+            buttons = [b for b in buttons
+                       if getattr(b, '_tab', self.manual_tab) == self.manual_tab]
+            radios = [r for r in radios
+                      if getattr(r, '_tab', self.manual_tab) == self.manual_tab]
+        return buttons, radios
+
+    def draw(self):
+        self.screen.fill(C_BG)
+        self._draw_status()
+        self._panel(self.rect_body)
+        self.pages[self.page]['draw']()
+        buttons, radios = self._visible_widgets()
+        for b in buttons:
+            b.draw(self.screen, self.fonts)
+        for rd in radios:
+            rd.draw(self.screen, self.fonts)
+        self.btn_estop.draw(self.screen, self.fonts)
+        pygame.display.flip()
+
+    # ---------- 主循环 ----------
+    def run(self):
+        clock = pygame.time.Clock()
+        running = True
+        while running:
+            for raw_event in pygame.event.get():
+                is_touch = raw_event.type in (
+                    pygame.FINGERDOWN, pygame.FINGERMOTION, pygame.FINGERUP)
+                ev = touch_event_to_mouse_event(raw_event, (self.W, self.H))
+                if is_touch:
+                    pygame.mouse.set_pos(ev.pos)
+
+                if ev.type == pygame.QUIT:
+                    running = False
+                elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE:
+                    if self.page != 'main':
+                        self._goto('main')
+                    else:
+                        running = False
+                elif ev.type == pygame.VIDEORESIZE:
+                    self.W, self.H = ev.w, ev.h
+                    self._build_all()
+                elif self.btn_estop.handle(ev):
+                    pass
+                elif ev.type == pygame.MOUSEBUTTONDOWN and self.page == 'manual':
+                    # Tab 点击
+                    for key, rect in self.rect_tabs.items():
+                        if rect.collidepoint(ev.pos):
+                            self.manual_tab = key
+                            break
+                    else:
+                        self._dispatch(ev)
+                else:
+                    self._dispatch(ev)
+            self._drain()
+            self.draw()
+            clock.tick(30)
+        self.backend.disconnect()
+        pygame.quit()
+
+    def _dispatch(self, ev):
+        buttons, radios = self._visible_widgets()
+        for b in buttons:
+            if b.handle(ev):
+                return
+        for rd in radios:
+            rd.handle(ev)
+
+    def _drain(self):
+        while not self._q.empty():
+            item = self._q.get_nowait()
+            if item[0] == 'log':
+                self._log(item[1], item[2])
+            elif item[0] == 'state':
+                self.state = item[1]
+            elif item[0] == 'progress':
+                self.progress_stage, self.progress = item[1], item[2]
+            elif item[0] == 'done':
+                self._log('INFO' if item[1] else 'WARN',
+                          f'任务结束: {item[2]}')
+
+
+def _parse_size():
+    if '--window' in sys.argv:
+        i = sys.argv.index('--window')
+        if i + 1 < len(sys.argv) and 'x' in sys.argv[i + 1]:
+            width_text, height_text = sys.argv[i + 1].split('x')
+            try:
+                return int(width_text), int(height_text)
+            except ValueError as error:
+                raise ValueError('窗口尺寸必须是整数，例如 1024x600') from error
+        return (960, 600)
+    return None
+
+
+if __name__ == '__main__':
+    try:
+        FbGUI(_parse_size()).run()
+    except pygame.error as e:
+        # kmsdrm 失败时 (比如在桌面上跑) 回退窗口模式重试
+        if os.environ.get('SDL_VIDEODRIVER') == 'kmsdrm':
+            print(f'[GUI] kmsdrm 打开失败 ({e}), 回退窗口模式')
+            del os.environ['SDL_VIDEODRIVER']
+            os.environ['SDL_VIDEODRIVER'] = 'x11,wayland'
+            FbGUI((960, 600)).run()
+        else:
+            raise

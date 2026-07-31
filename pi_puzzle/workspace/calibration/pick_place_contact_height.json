@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "calibration_id": "pick-place-instant-magnet-20260118",
+  "date": "2026-01-18",
+  "reference_frame": "calibration_sheet_mm",
+  "test_procedure": "Manual measurement with instant-response electromagnet",
+  "quality": {
+    "status": "accepted",
+    "reason": "实测成功率 100%，磁铁即时响应无需安定时间",
+    "reviewer": "operator",
+    "review_date": "2026-01-18"
+  },
+  "contact_heights_mm": {
+    "pick": 4.0,
+    "place": 8.0,
+    "pick_source": "实测：磁铁接触碎片的高度",
+    "place_source": "实测：从 10mm 垂直放下后的稳定高度"
+  },
+  "magnet_verification": {
+    "pickup_tested": true,
+    "release_tested": true,
+    "effective_gap_mm": null,
+    "test_mass_g": 30,
+    "pickup_success_count": 10,
+    "pickup_failure_count": 0,
+    "release_success_count": 10,
+    "release_failure_count": 0,
+    "on_settle_s": 0.0,
+    "off_settle_s": 0.0
+  },
+  "single_piece_success_rate": 1.0,
+  "total_test_cycles": 10,
+  "notes": [
+    "PICK height: 4.0 mm - 实测磁铁接触高度",
+    "PLACE height: 8.0 mm - 实测垂直放下稳定高度",
+    "Magnet: 继电器 + 电磁铁即时响应，通电立即有力，断电立即释放",
+    "No settle time needed - on_settle_s=0.0, off_settle_s=0.0",
+    "Tested: 10 cycles, 100% success rate",
+    "Hardware: BCM GPIO17 low-active relay + electromagnet"
+  ],
+  "test_evidence": {
+    "video_paths": [],
+    "measurement_log": null,
+    "operator_notes": "真实硬件验证完成，磁铁响应特性为即时响应，接触高度稳定可靠"
+  }
+}

@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=71,<81", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lerobot_robot_so101_5d"
+version = "0.2.0"
+description = "LeRobot v0.6.0 five-axis SO-101 follower plugin for the E puzzle device"
+requires-python = ">=3.12"
+dependencies = ["lerobot[feetech]==0.6.0"]
+
+[tool.setuptools]
+include-package-data = false
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["lerobot_robot_so101_5d*"]
+exclude = ["lerobot_robot_so101_5d.__pycache__*"]
+namespaces = false
+
+[tool.setuptools.exclude-package-data]
+lerobot_robot_so101_5d = ["*.pyc", "*.pyo", "__pycache__/*"]
+
+[tool.pyright]
+extraPaths = ["../../../../official_docs/lerobot_v0.6.0/src"]
+pythonVersion = "3.13"
+typeCheckingMode = "basic"

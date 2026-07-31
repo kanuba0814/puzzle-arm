@@ -1,0 +1,25 @@
+#!/bin/bash
+# 树莓派 (OS Lite, 纯 tty 无桌面) 启动机械臂 GUI
+# 用法: bash tools/start_gui_fb.sh
+set -e
+cd "$(dirname "$0")/.."
+
+# 1) 解释器选择: 优先系统 python3 + apt 版 pygame (Debian SDL2 带 kmsdrm,
+#    tty 直显必须; pip 的 pygame-ce wheel 的 SDL2 不带 kmsdrm, 只能窗口模式)
+PY=venv/bin/python
+if ! $PY -c "import pygame" 2>/dev/null; then
+    echo "[启动脚本] 安装 python3-pygame / libegl1 / libgles2 (需联网一次)"
+    sudo apt-get install -y python3-pygame libegl1 libgles2
+fi
+# 中文字体
+if ! ls /usr/share/fonts/truetype/wqy/wqy-zenhei.ttc >/dev/null 2>&1 \
+        && [ ! -f fonts/NotoSansCJK-Regular.ttc ]; then
+    echo "[启动脚本] 安装 fonts-wqy-zenhei (需联网一次)"
+    sudo apt-get install -y fonts-wqy-zenhei
+fi
+
+# 3) tty 直显: SDL2 kmsdrm 驱动 (不依赖 X/桌面)
+export SDL_VIDEODRIVER=kmsdrm
+export SDL_VIDEO_KMSDRM_DEVICE=/dev/dri/card1
+
+exec $PY gui_fb.py
