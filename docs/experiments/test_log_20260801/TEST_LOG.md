@@ -59,12 +59,34 @@ FAILED (failures=1, errors=12)
 ```
 （2026-08-01 09:55 实机读回）
 
-### 3.3 运动链路验证
+### 3.2 运动链路验证
 
 - PARK 确认: `{"success": true, "message": "已在正式 PARK", "duration_ms": 1469}`
 - 关节读回: 通过（connect_bumpless + get_observation）
 - 舵机响应: Acceleration=10, Goal_Velocity 分档生效
 
+
+### 3.3 实机运动测试（PARK→HOME→PARK 完整往返）
+
+**2026-08-01 09:59 实机执行**（motion_selftest.py，机械臂真实运动 21.7s）
+
+| 阶段 | 耗时 | 结果 |
+|---|---|---|
+| PARK→HOME | 10.9s | success=True |
+| HOME→PARK | 10.8s | success=True |
+| 总运动 | 21.7s | ✓ |
+
+**HOME 关节位移**（从 PARK）：
+- shoulder_pan: +93.7°（-95.43 → -1.54）
+- shoulder_lift: +78.6°（-100.66 → -22.07）
+- elbow_flex: -58.3°（97.98 → 39.96）
+- wrist_flex: +4.3°（79.91 → 83.69）
+- wrist_roll: +0.0°（-82.59 → -82.59）
+
+**PARK 回位精度**：漂移全部 ≤0.09°（pan 0.0 / lift -0.09 / elbow 0.0 / wf 0.0 / roll 0.0）
+
+记录文件: /home/epuzzle/motion_selftest.json
+详细日志: /opt/epuzzle/workspace/logs/motion_detail/motion-*.jsonl
 
 ### 3.2 运动控制参数
 
@@ -89,4 +111,4 @@ FAILED (failures=1, errors=12)
 - 核心单元测试：**115/115 通过**（Pi 3.13）
 - 视觉检测：4 片稳定检出（黑底+反光过滤），SOLVED 严格解
 - 求解精度：反推矩形误差 <1mm（59.8×98.3 vs 60×100）
-- 运动链路：PARK/HOME 过渡正常，梯形速度+旋转补偿生效
+- 运动链路：PARK→HOME→PARK 完整往返 21.7s，回位漂移 ≤0.09°

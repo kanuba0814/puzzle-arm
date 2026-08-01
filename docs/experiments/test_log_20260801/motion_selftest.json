@@ -1,0 +1,67 @@
+[
+  {
+    "tag": "start",
+    "t_s": 50005.41,
+    "joints": {
+      "shoulder_pan.pos": -95.25,
+      "shoulder_lift.pos": -100.75,
+      "elbow_flex.pos": 98.33,
+      "wrist_flex.pos": 79.82,
+      "wrist_roll.pos": -82.77
+    }
+  },
+  {
+    "tag": "home",
+    "t_s": 50016.28,
+    "joints": {
+      "shoulder_pan.pos": -1.54,
+      "shoulder_lift.pos": -22.15,
+      "elbow_flex.pos": 40.04,
+      "wrist_flex.pos": 84.13,
+      "wrist_roll.pos": -82.77
+    }
+  },
+  {
+    "tag": "park_to_home",
+    "duration_s": 10.86,
+    "success": true
+  },
+  {
+    "tag": "home_stable",
+    "t_s": 50017.28,
+    "joints": {
+      "shoulder_pan.pos": -0.13,
+      "shoulder_lift.pos": -22.15,
+      "elbow_flex.pos": 40.04,
+      "wrist_flex.pos": 84.13,
+      "wrist_roll.pos": -82.77
+    }
+  },
+  {
+    "tag": "park_back",
+    "t_s": 50028.08,
+    "joints": {
+      "shoulder_pan.pos": -95.16,
+      "shoulder_lift.pos": -98.99,
+      "elbow_flex.pos": 94.2,
+      "wrist_flex.pos": 80.09,
+      "wrist_roll.pos": -82.77
+    }
+  },
+  {
+    "tag": "home_to_park",
+    "duration_s": 10.8,
+    "success": true
+  },
+  {
+    "tag": "park_verify",
+    "t_s": 50028.08,
+    "joints": {
+      "shoulder_pan.pos": -95.16,
+      "shoulder_lift.pos": -99.08,
+      "elbow_flex.pos": 94.2,
+      "wrist_flex.pos": 80.09,
+      "wrist_roll.pos": -82.77
+    }
+  }
+]
