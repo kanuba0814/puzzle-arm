@@ -3,14 +3,112 @@
   "title": "PlacementPlan",
   "type": "object",
   "additionalProperties": false,
-  "required": ["piece_id", "order", "source", "target", "geometry_score", "texture_score", "texture_status", "texture_status_reason", "plan_confidence", "source_timestamp_ns", "equivalent_yaws_deg", "solver_version"],
+  "required": [
+    "piece_id",
+    "order",
+    "source",
+    "target",
+    "geometry_score",
+    "texture_score",
+    "texture_status",
+    "texture_status_reason",
+    "plan_confidence",
+    "source_timestamp_ns",
+    "equivalent_yaws_deg",
+    "solver_version"
+  ],
   "properties": {
-    "piece_id": {"type": "string", "minLength": 1}, "order": {"type": "integer", "minimum": 0},
-    "source": {"$ref": "#/$defs/pose2"}, "target": {"$ref": "#/$defs/pose2", "description": "target.yaw_deg 是权威放置姿态。"},
-    "geometry_score": {"type": "number"}, "texture_score": {"type": ["number", "null"]},
-    "texture_status": {"enum": ["not_run", "ok", "insufficient", "ambiguous"]}, "texture_status_reason": {"type": "string"},
-    "plan_confidence": {"type": "number", "minimum": 0, "maximum": 1}, "source_timestamp_ns": {"type": "integer", "minimum": 0},
-    "equivalent_yaws_deg": {"type": "array", "items": {"type": "number", "minimum": -180, "exclusiveMaximum": 180}}, "solver_version": {"type": "string"}
+    "piece_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "order": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "source": {
+      "$ref": "#/$defs/pose2",
+      "description": "source.yaw_deg 恒为 0（0° 基准约定）。"
+    },
+    "target": {
+      "$ref": "#/$defs/pose2",
+      "description": "target.yaw_deg 是权威放置姿态 = 求解器相对旋转角（0° 基准）。"
+    },
+    "geometry_score": {
+      "type": "number"
+    },
+    "texture_score": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "texture_status": {
+      "enum": [
+        "not_run",
+        "ok",
+        "insufficient",
+        "ambiguous"
+      ]
+    },
+    "texture_status_reason": {
+      "type": "string"
+    },
+    "plan_confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "source_timestamp_ns": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "equivalent_yaws_deg": {
+      "type": "array",
+      "items": {
+        "type": "number",
+        "minimum": -180,
+        "exclusiveMaximum": 180
+      }
+    },
+    "solver_version": {
+      "type": "string"
+    }
   },
-  "$defs": {"pose2": {"type": "object", "additionalProperties": false, "required": ["frame", "center_mm", "yaw_deg"], "properties": {"frame": {"const": "table_mm"}, "center_mm": {"type": "array", "prefixItems": [{"type": "number"}, {"type": "number"}], "items": false, "minItems": 2, "maxItems": 2}, "yaw_deg": {"type": "number", "minimum": -180, "exclusiveMaximum": 180}}}}
+  "$defs": {
+    "pose2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "frame",
+        "center_mm",
+        "yaw_deg"
+      ],
+      "properties": {
+        "frame": {
+          "const": "table_mm"
+        },
+        "center_mm": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "yaw_deg": {
+          "type": "number",
+          "minimum": -180,
+          "exclusiveMaximum": 180,
+          "description": "0° 基准约定：source.yaw_deg 恒为 0（不测量碎片绝对朝向），target.yaw_deg 为求解器相对旋转角（拼图只需相对方向）。"
+        }
+      }
+    }
+  }
 }

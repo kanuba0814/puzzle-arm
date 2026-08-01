@@ -174,7 +174,7 @@ def main() -> None:
         delta = p["tgt_yaw"] - p["src_yaw"]
         print(
             f"  {p['piece_id']}: 源({p['src_mm'][0]:.1f},{p['src_mm'][1]:.1f}) "
-            f"yaw={p['src_yaw']:.1f} → 目标({p['tgt_mm'][0]:.1f},{p['tgt_mm'][1]:.1f}) "
+            f"yaw=0.0(约定) → 目标({p['tgt_mm'][0]:.1f},{p['tgt_mm'][1]:.1f}) "
             f"yaw={p['tgt_yaw']:.1f}  Δyaw={delta:.1f}"
         )
 
@@ -197,7 +197,7 @@ def main() -> None:
     def yaw_pose(ref: PieceRef, height: float, yaw_table_deg: float) -> ToolPose:
         """构造带 yaw 的 ToolPose。
 
-        yaw_table_deg 是 table_mm 系的碎片朝向（求解器/视觉的几何角），
+        yaw_table_deg 是 0° 基准下的碎片朝向（求解器相对角或 0），
         ToolPose.yaw_deg 必须是 robot_base_mm 系（kinematics 里 yaw = pan + roll），
         因此加 TABLE_TO_ROBOT_YAW_DEG 做坐标系旋转。
         """
@@ -217,6 +217,9 @@ def main() -> None:
     ) -> tuple[float, float]:
         """计算 PICK/PLACE 的 robot 系 yaw，保证碎片旋转 ≡ Δyaw (mod 360)。
 
+        0° 基准约定：src_yaw_table 恒为 0（不测量碎片绝对朝向），
+        tgt_yaw_table 即求解器相对旋转角。
+
         物理约束：wrist_roll 单圈（STS3215 0..4095 ticks），逻辑限位 [-180,180]
         → 物理限位 [logical*direction+offset] = [-262.15, +97.85]（direction=-1,
         offset=-82.15）。碎片旋转 = 末端 yaw 变化 = Δpan + Δroll_physical，
@@ -233,9 +236,21 @@ def main() -> None:
         roll_hi = max(roll_limits_logical[0] * roll_dir + roll_off,
                       roll_limits_logical[1] * roll_dir + roll_off)
 
-        # PICK yaw：碎片几何朝向（robot 系）
-        pick_yaw = src_yaw_table + TABLE_TO_ROBOT_YAW_DEG
-        pick_pose = yaw_pose(src_ref, 60.0, src_yaw_table)
+        # PICK yaw：用 pose_for 径向默认 yaw（robot 系），保证 HOME→PICK
+        # 路径平滑。实机发现：用视觉 angle_deg 作为 PICK yaw 时，某些位置
+        # （如右上角 piece_03 yaw=73°）IK 出现多解突变，lift 单步跳 47°。
+        # 碎片被磁铁吸住后跟随磁头转，最终朝向由 PLACE yaw = PICK yaw + Δyaw
+        # 决定，PICK 的绝对 yaw 不影响拼接结果。
+        # （0° 基准：碎片初始朝向视为 0，Δyaw = tgt_yaw − 0 即求解器相对角，
+        #   碎片相对桌面旋转 = 磁头 yaw 变化 = Δpan + Δroll。）
+        pick_base = adapter.pose_for(src_ref, 60.0)
+        pick_yaw = pick_base.yaw_deg  # 径向默认（robot 系）
+        pick_pose = ToolPose(
+            pick_base.frame,
+            pick_base.position_mm,
+            pick_base.pitch_deg,
+            pick_yaw,
+        )
         pick_jv = adapter.kinematics.inverse(pick_pose)
         pm = pick_jv.as_mapping()
         pan_pick_log = pm["shoulder_pan.pos"]

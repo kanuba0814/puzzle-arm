@@ -6,7 +6,13 @@ import unittest
 import numpy as np
 
 from puzzle import PuzzleOptions
-from puzzle.solver import describe_edges, edge_candidates, se2_align
+from puzzle.solver import (
+    SOURCE_YAW_BASELINE_DEG,
+    _yaw_from_rotation,
+    describe_edges,
+    edge_candidates,
+    se2_align,
+)
 
 
 @dataclass(frozen=True)
@@ -39,6 +45,24 @@ class PuzzleSolverUnitTest(unittest.TestCase):
             if candidate.kind == "internal"
         }
         self.assertIn(37.0, offsets)
+
+    def test_yaw_zero_baseline_is_relative_rotation(self) -> None:
+        """0° 基准：target.yaw = 求解器相对旋转角，与视觉绝对朝向无关。"""
+        def rotation(deg: float) -> np.ndarray:
+            theta = np.radians(deg)
+            return np.array(
+                [
+                    [np.cos(theta), -np.sin(theta)],
+                    [np.sin(theta), np.cos(theta)],
+                ]
+            )
+
+        for deg in (30.0, -170.0, 179.0, -179.9):
+            yaw = _yaw_from_rotation(rotation(deg), SOURCE_YAW_BASELINE_DEG)
+            expected = (deg + 180.0) % 360.0 - 180.0
+            self.assertAlmostEqual(yaw, expected, places=6)
+        # 基准角必须为零：绝对朝向不参与旋转量
+        self.assertEqual(SOURCE_YAW_BASELINE_DEG, 0.0)
 
 
 if __name__ == "__main__":

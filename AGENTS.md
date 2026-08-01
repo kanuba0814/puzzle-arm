@@ -89,6 +89,7 @@
 - 同步 Pi 时只推 `src/` 不够：`workspace/tools/`、`tests/`、`apps/` 与 `data_contracts/` 曾整体漏同步，导致 `MotionConfig` 字段名不匹配和 CLI 缺参数。rsync 覆盖也会抹掉在 Pi 上手工打的临时补丁，改动必须回到宿主源码再同步；同步 `control/` 后要清 `__pycache__` 才能确认新代码生效。
 - Supervisor 的 `refresh_detection` 原先硬编码红色检测，会在 pick-place 前用红色结果清空其他材料的 `pieces.json`。现由 `--material` 选择 `detect_generic_pieces.py`（white/green/blue）或 legacy `detect_red_pieces.py`。`WORKSPACE = Path("workspace")` 是相对路径，CLI 必须从 `/opt/epuzzle` 项目根执行；不要用自引用软链接 `workspace -> .` 绕过，它会造成目录递归。
 - 当前无吸附/释放传感器：`VERIFY_PICK`/`VERIFY_PLACE` 只做提升运动并记 `verify_pick_unsensed`/`verify_place_unsensed`，`success: true` 仅代表运动与磁铁时序完成，不代表碎片真被吸起或放下。抓放成败必须由现场目视确认后才可写入验收记录。
+- 旋转基准 0° 约定（2026-08-01 起）：不测量碎片绝对朝向。`PlacementPlan.source.yaw_deg` 恒为 `0`（相机拍下初始位置一律视为 0°），`target.yaw_deg` 即求解器相对旋转角（拼图只需碎片间相对方向）。删除“质心→最远顶点”几何朝向的理由：对轮廓噪声敏感、接近对称形状时跳变 180°，且电磁吸头点接触下绝对朝向无夹持约束。执行端 `run_assembly_4pieces.py` 的 roll 补偿（碎片旋转 = Δpan + Δroll = Δyaw，模 360）是该约定的唯一消费方；求解器绝对角输出已废弃。
 
 ## 提交前最低检查
 

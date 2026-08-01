@@ -294,22 +294,16 @@ def solve_puzzle_123(
         delta_yaw_deg = float(
             np.degrees(np.arctan2(rotation[1, 0], rotation[0, 0]))
         )
-        # 关键修复：yaw 必须用有方向的顶点几何朝向（与求解器同一参考系），
-        # 不能用 PCA 主轴角（惯性主轴，180° 模糊且与碎片几何边无关）。
-        # 磁头吸住碎片后碎片对齐磁头 yaw，PICK yaw 必须等于碎片真实朝向，
-        # 否则旋转量错误 → 放置角度偏差大（实机已验证）。
-        # 朝向 = 质心→最远顶点方向（对噪声鲁棒、方向唯一）。
-        verts_arr = np.asarray(piece.polygon_table_mm, dtype=np.float64)
-        geom_centroid = verts_arr.mean(axis=0)
-        farthest = max(
-            verts_arr, key=lambda v: float(np.hypot(v[0] - geom_centroid[0], v[1] - geom_centroid[1]))
-        )
-        source_yaw = float(
-            np.degrees(np.arctan2(
-                farthest[1] - geom_centroid[1], farthest[0] - geom_centroid[0]
-            ))
-        )
-        final_yaw = (source_yaw + delta_yaw_deg + 180.0) % 360.0 - 180.0
+        # 旋转基准约定（0° 基准，2026-08-01）：不测量碎片绝对朝向。
+        # 相机拍下的初始位置一律视为 0°，旋转量直接采用求解器相对旋转
+        # delta_yaw_deg（拼图只需碎片之间的相对方向）。
+        # 机械臂执行端（run_assembly_4pieces.py）负责补偿自身 pan 变化，
+        # 保证碎片相对桌面旋转 = Δpan + Δroll = Δyaw（模 360）。
+        # 删除理由：质心→最远顶点几何朝向对轮廓噪声敏感，接近对称形状时
+        # 会跳变 180°；且电磁吸头点接触下碎片绝对朝向无夹持约束，测量它
+        # 对拼接结果没有意义。
+        source_yaw = 0.0
+        final_yaw = (delta_yaw_deg + 180.0) % 360.0 - 180.0
 
         source_pose = Pose2(
             frame="table_mm",

@@ -30,6 +30,12 @@ class PuzzleSolveStatus(str, Enum):
     NO_SOLUTION = "NO_SOLUTION"
 
 
+# 旋转基准约定（2026-08-01）：不测量碎片绝对朝向，相机拍下的初始位置
+# 一律视为 0°。PlacementPlan.source.yaw_deg 恒为 0，target.yaw_deg 即
+# 求解器相对旋转角（拼图只需要碎片间的相对方向）。
+SOURCE_YAW_BASELINE_DEG = 0.0
+
+
 @dataclass(frozen=True)
 class Pose2:
     frame: str
@@ -380,8 +386,8 @@ def _single_piece_solution(
     plan = PlacementPlan(
         str(piece.piece_id),
         0,
-        Pose2("table_mm", piece.center_table_mm, float(piece.yaw_deg)),
-        Pose2("table_mm", center, float(piece.yaw_deg)),
+        Pose2("table_mm", piece.center_table_mm, SOURCE_YAW_BASELINE_DEG),
+        Pose2("table_mm", center, SOURCE_YAW_BASELINE_DEG),  # 单片不旋转
         0.0,
         None,
         "not_run",
@@ -579,6 +585,10 @@ def _assembly_score(
 
 
 def _yaw_from_rotation(rotation: np.ndarray, yaw_deg: float) -> float:
+    """把 2×2 旋转矩阵的旋转角叠加到基准角并归一化到 [-180, 180)。
+
+    0° 基准约定下调用方传 SOURCE_YAW_BASELINE_DEG，返回即相对旋转角。
+    """
     return (
         yaw_deg + math.degrees(math.atan2(rotation[1, 0], rotation[0, 0])) + 180.0
     ) % 360.0 - 180.0
@@ -691,11 +701,11 @@ def _plans_for_assembly(
             PlacementPlan(
                 piece.piece_id,
                 order,
-                Pose2("table_mm", piece.center_table_mm, float(piece.yaw_deg)),
+                Pose2("table_mm", piece.center_table_mm, SOURCE_YAW_BASELINE_DEG),
                 Pose2(
                     "table_mm",
                     (float(target_center[0]), float(target_center[1])),
-                    _yaw_from_rotation(rotation, float(piece.yaw_deg)),
+                    _yaw_from_rotation(rotation, SOURCE_YAW_BASELINE_DEG),
                 ),
                 score,
                 None,

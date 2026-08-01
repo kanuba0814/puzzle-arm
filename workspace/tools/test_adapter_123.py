@@ -43,6 +43,7 @@ class FakePiece:
     yaw_deg: float
     timestamp_ns: int
     equivalent_yaws_deg: tuple[float, ...]
+    grip_point_table_mm: tuple[float, float] | None = None
 
 
 def make_pieces(scattered: list[np.ndarray]) -> tuple[FakePiece, ...]:
@@ -97,14 +98,21 @@ def main() -> int:
             and np.all(centers[:, 1] >= target.min_y_mm)
             and np.all(centers[:, 1] <= target.max_y_mm)
         )
+        # 0° 基准约定：source.yaw 恒为 0（不测量绝对朝向），
+        # target.yaw 即求解器相对旋转角。
+        zero_baseline = all(
+            plan.source.yaw_deg == 0.0 and -180.0 <= plan.target.yaw_deg < 180.0
+            for plan in result.placements
+        )
 
         print(
             f"seed={seed}: {result.status.value} "
             f"{width:.1f}x{height:.1f} 真值{true_size[0]:.0f}x{true_size[1]:.0f} "
             f"尺寸{'OK' if match else '不符'} 落位{'在区内' if inside else '越界'} "
+            f"0基准{'OK' if zero_baseline else '不符'} "
             f"片数={len(result.placements)} 用时={result.timing_ms['total_ms']:.0f}ms"
         )
-        if match and inside and len(result.placements) == 4:
+        if match and inside and zero_baseline and len(result.placements) == 4:
             passed += 1
 
     print(f"--- {passed}/{total} 通过")
