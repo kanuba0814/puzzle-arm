@@ -259,13 +259,27 @@ def main() -> None:
 
         for idx, p in enumerate(pieces, 1):
             print(f"\n=== 片 {idx}/4: {p['piece_id']} ===")
+            # 完成状态持久化：重跑时跳过已完成片，避免 USB 掉线崩溃后
+            # 重复抓放已放置的碎片（实机踩坑：piece_01 被二次抓取放错）。
+            state_path = Path("/home/epuzzle/assembly_state.json")
+            done = set()
+            if state_path.exists():
+                try:
+                    done = set(json.loads(state_path.read_text()).get("done", []))
+                except (OSError, json.JSONDecodeError):
+                    done = set()
+            if p["piece_id"] in done:
+                print(f"  跳过（已完成）")
+                continue
             src_ref = PieceRef(p["piece_id"], p["src_mm"])
             tgt_ref = PieceRef(f"{p['piece_id']}-place", p["tgt_mm"])
             pick_pose = yaw_pose(src_ref, heights.pick_mm, p["src_yaw"])
             place_pose = yaw_pose(tgt_ref, heights.place_mm, p["tgt_yaw"])
             plan_ref = PlacementPlanRef(batch.source_image_sha256, batch.monotonic_ns)
             active.grasp_fsm(plan_ref, piece=src_ref, pick_pose=pick_pose, place_pose=place_pose)
-            print(f"✓ {p['piece_id']} 完成")
+            done.add(p["piece_id"])
+            state_path.write_text(json.dumps({"done": sorted(done)}))
+            print(f"✓ {p['piece_id']} 完成（进度 {len(done)}/4）")
             time.sleep(1.0)
 
         # HOME → PARK
