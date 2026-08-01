@@ -7,6 +7,7 @@ from pathlib import Path
 from control.kinematics import ArmGeometry, JointVector, PlanarArmKinematics
 from control.motion_controller import (
     MotionConfig,
+    LowHeightPoseLock,
     MotionController,
     MotionErrorCode,
     MotionGoal,
@@ -47,6 +48,37 @@ class FakeRobot:
         self.sent_actions.append(dict(action))
         self.sent_velocities.append(goal_velocity)
         return dict(action)
+
+
+class FollowingRobot(FakeRobot):
+    def __init__(self, initial: dict[str, float]) -> None:
+        super().__init__([initial])
+        self.current = dict(initial)
+
+    def get_observation(self) -> dict[str, float]:
+        return dict(self.current)
+
+    def send_action(
+        self, action: dict[str, float], *, goal_velocity: int | None = None
+    ) -> dict[str, float]:
+        self.sent_actions.append(dict(action))
+        self.sent_velocities.append(goal_velocity)
+        self.current = dict(action)
+        return dict(action)
+
+
+class PoseDriftRobot(FollowingRobot):
+    def __init__(self, initial: dict[str, float], fail_on_send: int) -> None:
+        super().__init__(initial)
+        self.fail_on_send = fail_on_send
+        self.injected = False
+
+    def get_observation(self) -> dict[str, float]:
+        observation = dict(self.current)
+        if len(self.sent_actions) == self.fail_on_send and not self.injected:
+            observation["wrist_roll.pos"] += 10.0
+            self.injected = True
+        return observation
 
 
 class MotionControllerTest(unittest.TestCase):
@@ -131,6 +163,151 @@ class MotionControllerTest(unittest.TestCase):
 
         self.assertEqual(result.error_code, MotionErrorCode.IK_NO_SOLUTION)
         self.assertNotEqual(result.error_code, MotionErrorCode.GLOBAL_TIMEOUT)
+        self.assertEqual(robot.sent_actions, [])
+
+    def test_locked_vertical_move_uses_six_steps_and_holds_xy_pitch_yaw(self) -> None:
+        start = JointVector((0.0, 20.0, -80.0, 60.0, 0.0))
+        start_pose = self.model.forward(start)
+        target_position = (
+            start_pose.position_mm[0],
+            start_pose.position_mm[1],
+            start_pose.position_mm[2] - 30.0,
+        )
+        lock = LowHeightPoseLock(
+            yaw_robot_deg=start_pose.yaw_deg,
+            pitch_robot_deg=start_pose.pitch_deg,
+            entry_xy_robot_mm=start_pose.position_mm[:2],
+        )
+        goal = MotionGoal(
+            **{
+                **self._goal(target_position).__dict__,
+                "pitch_deg": lock.pitch_robot_deg,
+                "yaw_deg": lock.yaw_robot_deg,
+                "path_constraint": lock,
+            }
+        )
+        config = MotionConfig(
+            **{
+                **self.config.as_dict(),
+                "contact_min_z_mm": -100.0,
+                "joint_tolerance_deg": 0.2,
+            }
+        )
+        robot = FollowingRobot(start.as_mapping())
+
+        result = self._controller(robot, config).move(goal)
+
+        self.assertTrue(result.success, result.message)
+        self.assertEqual(result.planned_waypoints, 6)
+        self.assertEqual(result.executed_waypoints, 6)
+        self.assertEqual(len(robot.sent_actions), 6)
+        previous_z = start_pose.position_mm[2]
+        for action in robot.sent_actions:
+            pose = self.model.forward(JointVector.from_mapping(action))
+            self.assertAlmostEqual(pose.position_mm[0], start_pose.position_mm[0])
+            self.assertAlmostEqual(pose.position_mm[1], start_pose.position_mm[1])
+            self.assertAlmostEqual(pose.pitch_deg, start_pose.pitch_deg)
+            self.assertAlmostEqual(pose.yaw_deg, start_pose.yaw_deg)
+            self.assertAlmostEqual(previous_z - pose.position_mm[2], 5.0)
+            previous_z = pose.position_mm[2]
+
+    def test_locked_vertical_pose_drift_retreats_over_executed_waypoints(self) -> None:
+        start = JointVector((0.0, 20.0, -80.0, 60.0, 0.0))
+        start_pose = self.model.forward(start)
+        target_position = (
+            start_pose.position_mm[0],
+            start_pose.position_mm[1],
+            start_pose.position_mm[2] - 30.0,
+        )
+        lock = LowHeightPoseLock(
+            yaw_robot_deg=start_pose.yaw_deg,
+            pitch_robot_deg=start_pose.pitch_deg,
+            entry_xy_robot_mm=start_pose.position_mm[:2],
+        )
+        goal = MotionGoal(
+            **{
+                **self._goal(target_position).__dict__,
+                "pitch_deg": lock.pitch_robot_deg,
+                "yaw_deg": lock.yaw_robot_deg,
+                "path_constraint": lock,
+            }
+        )
+        config = MotionConfig(
+            **{
+                **self.config.as_dict(),
+                "contact_min_z_mm": -100.0,
+                "joint_tolerance_deg": 0.2,
+            }
+        )
+        robot = PoseDriftRobot(start.as_mapping(), fail_on_send=3)
+
+        result = self._controller(robot, config).move(goal)
+
+        self.assertFalse(result.success)
+        self.assertEqual(result.error_code, MotionErrorCode.POSE_LOCK_TRACKING_ERROR)
+        self.assertEqual(result.executed_waypoints, 2)
+        self.assertIn("已退回入口", result.message)
+        self.assertEqual(robot.sent_actions[-1], start.as_mapping())
+        self.assertEqual(result.final_joint_deg, start.as_mapping())
+
+    def test_locked_vertical_rejects_lateral_target_before_motion(self) -> None:
+        start = JointVector((0.0, 20.0, -80.0, 60.0, 0.0))
+        start_pose = self.model.forward(start)
+        lock = LowHeightPoseLock(
+            yaw_robot_deg=start_pose.yaw_deg,
+            pitch_robot_deg=start_pose.pitch_deg,
+            entry_xy_robot_mm=start_pose.position_mm[:2],
+        )
+        target = (
+            start_pose.position_mm[0] + 1.0,
+            start_pose.position_mm[1],
+            start_pose.position_mm[2] - 30.0,
+        )
+        goal = MotionGoal(
+            **{
+                **self._goal(target).__dict__,
+                "pitch_deg": lock.pitch_robot_deg,
+                "yaw_deg": lock.yaw_robot_deg,
+                "path_constraint": lock,
+            }
+        )
+        robot = FollowingRobot(start.as_mapping())
+
+        result = self._controller(robot).move(goal)
+
+        self.assertFalse(result.success)
+        self.assertEqual(result.error_code, MotionErrorCode.SAFETY_REJECTED)
+        self.assertIn("纯 Z", result.message)
+        self.assertEqual(robot.sent_actions, [])
+
+    def test_locked_vertical_rejects_wrist_limit_margin_before_motion(self) -> None:
+        start = JointVector((0.0, 20.0, -80.0, 60.0, 170.0))
+        start_pose = self.model.forward(start)
+        lock = LowHeightPoseLock(
+            yaw_robot_deg=start_pose.yaw_deg,
+            pitch_robot_deg=start_pose.pitch_deg,
+            entry_xy_robot_mm=start_pose.position_mm[:2],
+        )
+        target = (
+            start_pose.position_mm[0],
+            start_pose.position_mm[1],
+            start_pose.position_mm[2] - 30.0,
+        )
+        goal = MotionGoal(
+            **{
+                **self._goal(target).__dict__,
+                "pitch_deg": lock.pitch_robot_deg,
+                "yaw_deg": lock.yaw_robot_deg,
+                "path_constraint": lock,
+            }
+        )
+        robot = FollowingRobot(start.as_mapping())
+
+        result = self._controller(robot).move(goal)
+
+        self.assertFalse(result.success)
+        self.assertEqual(result.error_code, MotionErrorCode.SAFETY_REJECTED)
+        self.assertIn("15.000", result.message)
         self.assertEqual(robot.sent_actions, [])
 
     def test_unreachable_goal_is_rejected_before_any_servo_command(self) -> None:

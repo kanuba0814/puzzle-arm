@@ -99,6 +99,17 @@ class ControlDataContractsTest(unittest.TestCase):
         self.assertIn("xHCI", lock["reason"])
         self.assertGreaterEqual(len(lock["clear_requires"]), 5)
 
+    def test_motion_goal_low_height_pose_lock_contract_is_strict(self) -> None:
+        schema = json.loads(
+            Path("data_contracts/motion_goal.schema.json").read_text(encoding="utf-8")
+        )
+
+        lock = schema["properties"]["path_constraint"]
+        self.assertFalse(lock["additionalProperties"])
+        self.assertEqual(lock["properties"]["vertical_distance_mm"]["const"], 30.0)
+        self.assertEqual(lock["properties"]["cartesian_step_mm"]["const"], 5.0)
+        self.assertEqual(lock["properties"]["wrist_limit_margin_deg"]["const"], 15.0)
+
     def test_motion_result_final_joint_fields_are_exactly_five_axis(self) -> None:
         schema = json.loads(
             Path("data_contracts/motion_result.schema.json").read_text(encoding="utf-8")
@@ -117,6 +128,14 @@ class ControlDataContractsTest(unittest.TestCase):
         )
         self.assertNotIn("gripper.pos", joint_object["properties"])
         self.assertFalse(joint_object["additionalProperties"])
+        self.assertIn(
+            "POSE_LOCK_TRACKING_ERROR",
+            schema["properties"]["error_code"]["enum"],
+        )
+        self.assertIn(
+            "POSE_LOCK_RECOVERY_FAILED",
+            schema["properties"]["error_code"]["enum"],
+        )
 
     def test_calibration_sheet_transform_has_explicit_frames_and_units(self) -> None:
         schema = json.loads(

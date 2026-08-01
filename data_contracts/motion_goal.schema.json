@@ -71,6 +71,58 @@
       "type": "integer",
       "minimum": 0,
       "description": "Absolute time.monotonic_ns() deadline in the same clock domain as timestamp_ns"
+    },
+    "path_constraint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "yaw_robot_deg",
+        "pitch_robot_deg",
+        "entry_xy_robot_mm",
+        "vertical_distance_mm",
+        "cartesian_step_mm",
+        "yaw_tolerance_deg",
+        "pitch_tolerance_deg",
+        "wrist_limit_margin_deg",
+        "max_entry_xy_error_mm"
+      ],
+      "properties": {
+        "yaw_robot_deg": {
+          "type": "number"
+        },
+        "pitch_robot_deg": {
+          "type": "number"
+        },
+        "entry_xy_robot_mm": {
+          "type": "array",
+          "prefixItems": [
+            {"type": "number"},
+            {"type": "number"}
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "vertical_distance_mm": {
+          "const": 30.0
+        },
+        "cartesian_step_mm": {
+          "const": 5.0
+        },
+        "yaw_tolerance_deg": {
+          "const": 5.0
+        },
+        "pitch_tolerance_deg": {
+          "const": 5.0
+        },
+        "wrist_limit_margin_deg": {
+          "const": 15.0
+        },
+        "max_entry_xy_error_mm": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
     }
   }
 }

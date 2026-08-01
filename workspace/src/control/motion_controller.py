@@ -50,12 +50,67 @@ def _shortest_angle_delta(start_deg: float, target_deg: float) -> float:
     return (target_deg - start_deg + 180.0) % 360.0 - 180.0
 
 
+def _angular_error_deg(actual_deg: float, target_deg: float) -> float:
+    """周期任务空间角误差；不得用于有界关节位置误差。"""
+    return abs(_shortest_angle_delta(actual_deg, target_deg))
+
+
+@dataclass(frozen=True)
+class LowHeightPoseLock:
+    """最后 30 mm 纯 Z 运动的入口姿态保持约束。"""
+
+    yaw_robot_deg: float
+    pitch_robot_deg: float
+    entry_xy_robot_mm: tuple[float, float]
+    vertical_distance_mm: float = 30.0
+    cartesian_step_mm: float = 5.0
+    yaw_tolerance_deg: float = 5.0
+    pitch_tolerance_deg: float = 5.0
+    wrist_limit_margin_deg: float = 15.0
+    max_entry_xy_error_mm: float = 2.0
+
+    def __post_init__(self) -> None:
+        for name in (
+            "yaw_robot_deg",
+            "pitch_robot_deg",
+            "vertical_distance_mm",
+            "cartesian_step_mm",
+            "yaw_tolerance_deg",
+            "pitch_tolerance_deg",
+            "wrist_limit_margin_deg",
+            "max_entry_xy_error_mm",
+        ):
+            value = _finite(getattr(self, name), name)
+            object.__setattr__(self, name, value)
+        if len(self.entry_xy_robot_mm) != 2:
+            raise ValueError("entry_xy_robot_mm 必须包含 x/y")
+        entry_xy = tuple(
+            _finite(value, f"entry_xy_robot_mm[{index}]")
+            for index, value in enumerate(self.entry_xy_robot_mm)
+        )
+        object.__setattr__(self, "entry_xy_robot_mm", entry_xy)
+        for name in (
+            "vertical_distance_mm",
+            "cartesian_step_mm",
+            "yaw_tolerance_deg",
+            "pitch_tolerance_deg",
+            "wrist_limit_margin_deg",
+            "max_entry_xy_error_mm",
+        ):
+            if getattr(self, name) <= 0.0:
+                raise ValueError(f"{name} 必须大于零")
+        if self.cartesian_step_mm > self.vertical_distance_mm:
+            raise ValueError("cartesian_step_mm 不能大于 vertical_distance_mm")
+
+
 class MotionErrorCode(str, Enum):
     NONE = "NONE"
     IK_NO_SOLUTION = "IK_NO_SOLUTION"
     ROBOT_COMM_TIMEOUT = "ROBOT_COMM_TIMEOUT"
     SAFETY_REJECTED = "SAFETY_REJECTED"
     GLOBAL_TIMEOUT = "GLOBAL_TIMEOUT"
+    POSE_LOCK_TRACKING_ERROR = "POSE_LOCK_TRACKING_ERROR"
+    POSE_LOCK_RECOVERY_FAILED = "POSE_LOCK_RECOVERY_FAILED"
 
 
 class _PlanningFailure(ValueError):
@@ -75,6 +130,7 @@ class MotionGoal:
     phase: str
     speed_profile: str
     deadline_ns: int | None = None
+    path_constraint: LowHeightPoseLock | None = None
 
     def __post_init__(self) -> None:
         if not self.goal_id:
@@ -106,6 +162,10 @@ class MotionGoal:
             or self.deadline_ns < 0
         ):
             raise ValueError("deadline_ns 必须是非负整数")
+        if self.path_constraint is not None and not isinstance(
+            self.path_constraint, LowHeightPoseLock
+        ):
+            raise ValueError("path_constraint 必须是 LowHeightPoseLock")
 
     def as_pose(self) -> ToolPose:
         return ToolPose(
@@ -343,6 +403,8 @@ class MotionController:
 
         executed = 0
         final = current
+        entry = current
+        executed_targets: list[JointVector] = []
         last_index = len(plan.waypoints) - 1
         for index, waypoint in enumerate(plan.waypoints):
             if self._deadline_expired(goal):
@@ -356,27 +418,7 @@ class MotionController:
                     final=final,
                 )
             try:
-                # 梯形速度：按 speed_profile 查表下发 Goal_Velocity，
-                # 舵机固件（Acceleration + Goal_Velocity）生成平滑曲线。
-                goal_velocity = self._config.goal_velocity_by_profile.get(
-                    goal.speed_profile
-                )
-                # USB 瞬时掉线重试：3s 间隔最多重试 2 次；Goal_Position 写
-                # 幂等，重发同一目标安全。
-                sent: Mapping[str, object] | None = None
-                last_send_error: Exception | None = None
-                for _attempt in range(3):
-                    try:
-                        sent = self._robot.send_action(
-                            waypoint.as_mapping(), goal_velocity=goal_velocity
-                        )
-                        break
-                    except (ValueError, RuntimeError, OSError) as send_exc:
-                        last_send_error = send_exc
-                        self._sleep(3.0)
-                if sent is None:
-                    raise RuntimeError(f"舵机目标发送失败: {last_send_error}")
-                sent = JointVector.from_mapping(sent)
+                sent = self._send_waypoint(waypoint, goal.speed_profile)
             except (ValueError, RuntimeError, OSError) as exc:
                 return self._result(
                     goal,
@@ -423,16 +465,40 @@ class MotionController:
                 if index != last_index
                 else 0.0
             )
-            converged = self._wait_for_target(
+            converged, wait_failure = self._wait_for_target(
                 waypoint,
                 tolerance_deg=tolerance,
                 stable_samples=1 if use_follow else self._config.stable_samples,
                 minimum_dwell_s=minimum_dwell_s,
+                pose_lock=goal.path_constraint,
             )
             if converged is None:
                 if self._detail_log is not None:
                     self._detail_log.waypoint_timeout(
                         goal.goal_id, index, waypoint.max_abs_error(final)
+                    )
+                if wait_failure is not None and goal.path_constraint is not None:
+                    recovered, recovery_final = self._recover_locked_path(
+                        goal,
+                        tuple((*reversed(executed_targets), entry)),
+                        goal.path_constraint,
+                    )
+                    return self._result(
+                        goal,
+                        success=False,
+                        error_code=(
+                            MotionErrorCode.POSE_LOCK_TRACKING_ERROR
+                            if recovered
+                            else MotionErrorCode.POSE_LOCK_RECOVERY_FAILED
+                        ),
+                        message=(
+                            f"{wait_failure}；已退回入口"
+                            if recovered
+                            else f"{wait_failure}；锁定路径退回失败"
+                        ),
+                        planned=len(plan.waypoints),
+                        executed=executed,
+                        final=recovery_final if recovery_final is not None else final,
                     )
                 return self._result(
                     goal,
@@ -451,6 +517,7 @@ class MotionController:
                     final_error=converged.max_abs_error(waypoint),
                 )
             final = converged
+            executed_targets.append(waypoint)
             executed += 1
 
         return self._result(
@@ -489,6 +556,10 @@ class MotionController:
                 MotionErrorCode.SAFETY_REJECTED,
                 f"phase={goal.phase} 的目标 TCP 高度 {target_z:.3f} mm "
                 f"不在 [{minimum_target_z:.3f}, {self._config.max_z_mm:.3f}] mm",
+            )
+        if goal.path_constraint is not None:
+            return self._plan_locked_vertical(
+                goal, current, current_pose, target_pose, goal.path_constraint
             )
         dx = target_pose.position_mm[0] - current_pose.position_mm[0]
         dy = target_pose.position_mm[1] - current_pose.position_mm[1]
@@ -548,6 +619,128 @@ class MotionController:
         assert last_failure is not None
         raise last_failure
 
+    def _plan_locked_vertical(
+        self,
+        goal: MotionGoal,
+        current: JointVector,
+        current_pose: ToolPose,
+        target_pose: ToolPose,
+        lock: LowHeightPoseLock,
+    ) -> MotionPlan:
+        """规划固定 x/y/pitch/yaw 的有界低空纯 Z 路径。"""
+        entry_x, entry_y = lock.entry_xy_robot_mm
+        target_x, target_y, target_z = target_pose.position_mm
+        if abs(target_x - entry_x) > 1e-6 or abs(target_y - entry_y) > 1e-6:
+            raise _PlanningFailure(
+                MotionErrorCode.SAFETY_REJECTED,
+                "低空姿态锁目标必须是固定 x/y 的纯 Z 运动",
+            )
+        if (
+            _angular_error_deg(target_pose.yaw_deg, lock.yaw_robot_deg) > 1e-6
+            or _angular_error_deg(target_pose.pitch_deg, lock.pitch_robot_deg) > 1e-6
+        ):
+            raise _PlanningFailure(
+                MotionErrorCode.SAFETY_REJECTED,
+                "低空姿态锁目标 yaw/pitch 与锁存值不一致",
+            )
+        current_x, current_y, current_z = current_pose.position_mm
+        entry_xy_error = math.hypot(current_x - entry_x, current_y - entry_y)
+        if entry_xy_error > lock.max_entry_xy_error_mm:
+            raise _PlanningFailure(
+                MotionErrorCode.SAFETY_REJECTED,
+                f"低空姿态锁入口 XY 误差 {entry_xy_error:.3f} mm 超过 "
+                f"{lock.max_entry_xy_error_mm:.3f} mm",
+            )
+        if (
+            _angular_error_deg(current_pose.yaw_deg, lock.yaw_robot_deg)
+            > lock.yaw_tolerance_deg
+            or _angular_error_deg(current_pose.pitch_deg, lock.pitch_robot_deg)
+            > lock.pitch_tolerance_deg
+        ):
+            raise _PlanningFailure(
+                MotionErrorCode.SAFETY_REJECTED,
+                "低空姿态锁入口 yaw/pitch 已超出允许误差",
+            )
+        dz = target_z - current_z
+        distance_z = abs(dz)
+        if not (
+            lock.vertical_distance_mm - lock.cartesian_step_mm
+            < distance_z
+            <= lock.vertical_distance_mm + 1e-6
+        ):
+            raise _PlanningFailure(
+                MotionErrorCode.SAFETY_REJECTED,
+                f"低空姿态锁 Z 行程 {distance_z:.3f} mm 不属于最后 "
+                f"{lock.vertical_distance_mm:.3f} mm",
+            )
+        roll_low, roll_high = self._kinematics.geometry.joint_limits_deg[4]
+        usable_low = roll_low + lock.wrist_limit_margin_deg
+        usable_high = roll_high - lock.wrist_limit_margin_deg
+        if usable_low >= usable_high:
+            raise _PlanningFailure(
+                MotionErrorCode.SAFETY_REJECTED,
+                "J5 限位不足以保留低空姿态锁余量",
+            )
+
+        def check_wrist_margin(joints: JointVector, label: str) -> None:
+            wrist_roll = joints.values_deg[4]
+            if not usable_low <= wrist_roll <= usable_high:
+                raise _PlanningFailure(
+                    MotionErrorCode.SAFETY_REJECTED,
+                    f"{label} wrist_roll={wrist_roll:.3f}° 未保留 "
+                    f"{lock.wrist_limit_margin_deg:.3f}° 限位余量",
+                )
+
+        check_wrist_margin(current, "入口")
+        steps = math.ceil(distance_z / lock.cartesian_step_mm)
+        previous = current
+        waypoints: list[JointVector] = []
+        for index in range(1, steps + 1):
+            fraction = index / steps
+            pose = ToolPose(
+                frame=goal.frame,
+                position_mm=(entry_x, entry_y, current_z + dz * fraction),
+                pitch_deg=lock.pitch_robot_deg,
+                yaw_deg=lock.yaw_robot_deg,
+            )
+            try:
+                waypoint = self._kinematics.inverse(pose)
+            except ValueError as exc:
+                raise _PlanningFailure(
+                    MotionErrorCode.IK_NO_SOLUTION,
+                    f"低空姿态锁路径点 {index}/{steps} IK 不可达: {exc}",
+                ) from exc
+            check_wrist_margin(waypoint, f"路径点 {index}/{steps}")
+            joint_step = waypoint.max_abs_error(previous)
+            if joint_step > self._config.max_joint_step_deg:
+                raise _PlanningFailure(
+                    MotionErrorCode.SAFETY_REJECTED,
+                    f"低空姿态锁路径点 {index}/{steps} 关节步长 "
+                    f"{joint_step:.3f}° 超过 {self._config.max_joint_step_deg:.3f}°",
+                )
+            if max(
+                abs(waypoint.values_deg[0] - previous.values_deg[0]),
+                abs(waypoint.values_deg[4] - previous.values_deg[4]),
+            ) > 0.5:
+                raise _PlanningFailure(
+                    MotionErrorCode.SAFETY_REJECTED,
+                    f"低空姿态锁路径点 {index}/{steps} 出现 J1/J5 横向重构",
+                )
+            replay = self._kinematics.forward(waypoint)
+            if (
+                abs(replay.position_mm[0] - entry_x) > 1e-6
+                or abs(replay.position_mm[1] - entry_y) > 1e-6
+                or _angular_error_deg(replay.yaw_deg, lock.yaw_robot_deg) > 1e-6
+                or _angular_error_deg(replay.pitch_deg, lock.pitch_robot_deg) > 1e-6
+            ):
+                raise _PlanningFailure(
+                    MotionErrorCode.SAFETY_REJECTED,
+                    f"低空姿态锁路径点 {index}/{steps} FK 回放违反约束",
+                )
+            waypoints.append(waypoint)
+            previous = waypoint
+        return MotionPlan(tuple(waypoints))
+
     def _interpolate(
         self,
         current: JointVector,
@@ -592,6 +785,102 @@ class MotionController:
             previous = waypoint
         return waypoints
 
+    def _send_waypoint(
+        self, waypoint: JointVector, speed_profile: str
+    ) -> JointVector:
+        """有界重试发送单个五轴目标，并拒绝 adapter 篡改预检结果。"""
+        goal_velocity = self._config.goal_velocity_by_profile.get(speed_profile)
+        sent: Mapping[str, object] | None = None
+        last_send_error: Exception | None = None
+        for _attempt in range(3):
+            try:
+                sent = self._robot.send_action(
+                    waypoint.as_mapping(), goal_velocity=goal_velocity
+                )
+                break
+            except (ValueError, RuntimeError, OSError) as send_exc:
+                last_send_error = send_exc
+                self._sleep(3.0)
+        if sent is None:
+            raise RuntimeError(f"舵机目标发送失败: {last_send_error}")
+        sent_joints = JointVector.from_mapping(sent)
+        if sent_joints.max_abs_error(waypoint) > 1e-6:
+            raise ValueError("JointRobot 修改了已预检目标，拒绝继续执行")
+        return sent_joints
+
+    def _recover_locked_path(
+        self,
+        goal: MotionGoal,
+        recovery_targets: tuple[JointVector, ...],
+        pose_lock: LowHeightPoseLock,
+    ) -> tuple[bool, JointVector | None]:
+        """通信正常时沿已确认路径逆序退回；恢复阶段不做 fail-fast。"""
+        final: JointVector | None = None
+        for waypoint in recovery_targets:
+            if self._deadline_expired(goal):
+                return False, final
+            try:
+                self._send_waypoint(waypoint, goal.speed_profile)
+            except (ValueError, RuntimeError, OSError):
+                return False, final
+            converged, _failure = self._wait_for_target(
+                waypoint,
+                tolerance_deg=self._config.joint_tolerance_deg,
+                stable_samples=self._config.stable_samples,
+                pose_lock=pose_lock,
+                fail_fast_pose_lock=False,
+            )
+            if converged is None:
+                return False, final
+            final = converged
+        return True, final
+
+    def _pose_lock_violation(
+        self, actual: JointVector, pose_lock: LowHeightPoseLock
+    ) -> str | None:
+        try:
+            actual_pose = self._kinematics.forward(actual)
+        except ValueError as exc:
+            return f"低空姿态锁实际五轴无法 FK: {exc}"
+        entry_x, entry_y = pose_lock.entry_xy_robot_mm
+        xy_error = math.hypot(
+            actual_pose.position_mm[0] - entry_x,
+            actual_pose.position_mm[1] - entry_y,
+        )
+        yaw_error = _angular_error_deg(
+            actual_pose.yaw_deg, pose_lock.yaw_robot_deg
+        )
+        pitch_error = _angular_error_deg(
+            actual_pose.pitch_deg, pose_lock.pitch_robot_deg
+        )
+        roll_low, roll_high = self._kinematics.geometry.joint_limits_deg[4]
+        wrist_roll = actual.values_deg[4]
+        if not (
+            roll_low + pose_lock.wrist_limit_margin_deg
+            <= wrist_roll
+            <= roll_high - pose_lock.wrist_limit_margin_deg
+        ):
+            return (
+                f"低空姿态锁 J5 未保留 {pose_lock.wrist_limit_margin_deg:.3f}° "
+                f"限位余量"
+            )
+        if xy_error > pose_lock.max_entry_xy_error_mm:
+            return (
+                f"低空姿态锁 XY 漂移 {xy_error:.3f} mm 超过 "
+                f"{pose_lock.max_entry_xy_error_mm:.3f} mm"
+            )
+        if yaw_error > pose_lock.yaw_tolerance_deg:
+            return (
+                f"低空姿态锁 yaw 误差 {yaw_error:.3f}° 超过 "
+                f"{pose_lock.yaw_tolerance_deg:.3f}°"
+            )
+        if pitch_error > pose_lock.pitch_tolerance_deg:
+            return (
+                f"低空姿态锁 pitch 误差 {pitch_error:.3f}° 超过 "
+                f"{pose_lock.pitch_tolerance_deg:.3f}°"
+            )
+        return None
+
     def _read_joints(self) -> JointVector:
         """读取五轴状态；USB 瞬时掉线时 3s 间隔重试 2 次。
 
@@ -622,7 +911,9 @@ class MotionController:
         tolerance_deg: float | None = None,
         stable_samples: int | None = None,
         minimum_dwell_s: float = 0.0,
-    ) -> JointVector | None:
+        pose_lock: LowHeightPoseLock | None = None,
+        fail_fast_pose_lock: bool = True,
+    ) -> tuple[JointVector | None, str | None]:
         tolerance = (
             self._config.joint_tolerance_deg if tolerance_deg is None else tolerance_deg
         )
@@ -638,6 +929,7 @@ class MotionController:
         stable = 0
         latest: JointVector | None = None
         reads = 0
+        last_pose_lock_violation: str | None = None
         while self._monotonic() <= deadline:
             try:
                 latest = self._read_joints()
@@ -645,6 +937,16 @@ class MotionController:
                 stable = 0
             else:
                 reads += 1
+                pose_lock_violation = (
+                    self._pose_lock_violation(latest, pose_lock)
+                    if pose_lock is not None
+                    else None
+                )
+                if pose_lock_violation is not None:
+                    stable = 0
+                    last_pose_lock_violation = pose_lock_violation
+                    if fail_fast_pose_lock:
+                        return None, pose_lock_violation
                 if self._detail_log is not None:
                     error = latest.error_map(target)
                     self._detail_log.readback(
@@ -656,16 +958,17 @@ class MotionController:
                         tolerance_deg=tolerance,
                     )
                 if (
-                    self._monotonic() >= not_before
+                    pose_lock_violation is None
+                    and self._monotonic() >= not_before
                     and latest.max_abs_error(target) <= tolerance
                 ):
                     stable += 1
                     if stable >= required_stable:
-                        return latest
+                        return latest, None
                 else:
                     stable = 0
             self._sleep(self._config.poll_interval_s)
-        return None
+        return None, last_pose_lock_violation
 
     def _deadline_expired(self, goal: MotionGoal) -> bool:
         return goal.deadline_ns is not None and self._timestamp_ns() > goal.deadline_ns

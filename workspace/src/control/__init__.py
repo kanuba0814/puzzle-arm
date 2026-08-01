@@ -12,6 +12,7 @@ from .kinematics import (
 )
 from .magnet_controller import MagnetConfig, MagnetController, MagnetStatus
 from .motion_controller import (
+    LowHeightPoseLock,
     MotionConfig,
     MotionController,
     MotionErrorCode,
@@ -30,6 +31,7 @@ __all__ = [
     "MagnetConfig",
     "MagnetController",
     "MagnetStatus",
+    "LowHeightPoseLock",
     "MotionConfig",
     "MotionController",
     "MotionErrorCode",

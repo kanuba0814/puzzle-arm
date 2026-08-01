@@ -32,7 +32,9 @@
         "IK_NO_SOLUTION",
         "ROBOT_COMM_TIMEOUT",
         "SAFETY_REJECTED",
-        "GLOBAL_TIMEOUT"
+        "GLOBAL_TIMEOUT",
+        "POSE_LOCK_TRACKING_ERROR",
+        "POSE_LOCK_RECOVERY_FAILED"
       ]
     },
     "message": {
