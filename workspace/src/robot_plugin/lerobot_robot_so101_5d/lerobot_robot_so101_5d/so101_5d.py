@@ -49,6 +49,8 @@ class SO101Follower5D(SOFollower):
             calibration=self.calibration,
         )
         self.cameras = make_cameras_from_configs(config.cameras)
+        # Goal_Velocity 是舵机 SRAM 配置；同一速度档不应随每个路点重复写入。
+        self._last_goal_velocity: int | None = None
 
     def connect_bumpless(
         self,
@@ -61,6 +63,7 @@ class SO101Follower5D(SOFollower):
             raise RuntimeError("机械臂总线已经连接")
         try:
             self.bus.connect()
+            self._last_goal_velocity = None
             self.bus.disable_torque()
             if not self.is_calibrated:
                 raise RuntimeError("LeRobot 五轴电机标定寄存器不一致")
@@ -108,9 +111,9 @@ class SO101Follower5D(SOFollower):
     ) -> RobotAction:
         """拒绝缺失、额外或六轴旧字段，再交由官方安全步长过滤发送。
 
-        goal_velocity: 可选，非 None 时在发送前写 Goal_Velocity 寄存器，
+        goal_velocity: 可选，首次改变 profile 时写 Goal_Velocity 寄存器，
         用舵机固件的速度模式（Goal_Velocity + Acceleration）生成梯形
-        速度曲线；None 保持出厂默认（可能高速冲击）。
+        速度曲线；同一 profile 的后续路点不重复写；None 保持当前值。
         """
         actual_keys = set(action)
         expected_keys = set(JOINT_FEATURES)
@@ -122,9 +125,14 @@ class SO101Follower5D(SOFollower):
                 f" missing={missing_keys}, extra={extra_keys}"
             )
         if goal_velocity is not None:
-            self.bus.sync_write(
-                "Goal_Velocity",
-                {motor: goal_velocity for motor in JOINT_NAMES},
-                num_retry=2,
-            )
+            if isinstance(goal_velocity, bool) or not 0 <= int(goal_velocity) <= 32767:
+                raise ValueError("goal_velocity 必须是 0..32767 的整数")
+            velocity = int(goal_velocity)
+            if velocity != self._last_goal_velocity:
+                self.bus.sync_write(
+                    "Goal_Velocity",
+                    {motor: velocity for motor in JOINT_NAMES},
+                    num_retry=2,
+                )
+                self._last_goal_velocity = velocity
         return super().send_action(action)

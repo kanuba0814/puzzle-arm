@@ -83,11 +83,25 @@ def pick_place_motion_config() -> MotionConfig:
         max_joint_step_deg=10.0,
         joint_tolerance_deg=3.0,
         stable_samples=1,
-        poll_interval_s=0.02,
-        waypoint_timeout_s=3.0,
+        poll_interval_s=0.05,
+        waypoint_timeout_s=8.0,
         safe_min_z_mm=-20.0,
         contact_min_z_mm=-30.0,
         max_z_mm=180.0,
+        transit_cartesian_step_mm=25.0,
+        follow_tolerance_deg=8.0,
+        # 第一阶段仅提速空载/接近；持物速度保持保守档。
+        goal_velocity_by_profile={
+            "EMPTY_NORMAL": 250,
+            "EMPTY_SLOW": 150,
+            "HOLDING_SLOW": 100,
+        },
+        waypoint_min_dwell_s_by_profile={
+            "EMPTY_NORMAL": 0.15,
+            "EMPTY_SLOW": 0.20,
+            "HOLDING_SLOW": 0.30,
+            "LOCAL_POLICY": 0.15,
+        },
     )
 
 

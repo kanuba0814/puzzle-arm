@@ -139,6 +139,8 @@ class MotionConfig:
     # 与插件 connect_bumpless 已配置的 Acceleration 配合，由舵机固件生成
     # 加速-匀速-减速的梯形曲线，避免逐点高速冲击。
     goal_velocity_by_profile: dict[str, int] = field(default_factory=dict)
+    # 非终点路点的最小保持时间；防止宽跟随容差在舵机尚未启动时误判到位。
+    waypoint_min_dwell_s_by_profile: dict[str, float] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         for name in (
@@ -177,6 +179,14 @@ class MotionConfig:
             if transit <= 0.0:
                 raise ValueError("transit_cartesian_step_mm 必须大于零")
             object.__setattr__(self, "transit_cartesian_step_mm", transit)
+        for profile, dwell_s in self.waypoint_min_dwell_s_by_profile.items():
+            if profile not in _ALLOWED_SPEED_PROFILES:
+                raise ValueError(f"未知 speed_profile={profile}")
+            dwell = _finite(dwell_s, f"waypoint_min_dwell_s_by_profile[{profile}]")
+            if dwell < 0.0:
+                raise ValueError(
+                    f"waypoint_min_dwell_s_by_profile[{profile}] 不能小于零"
+                )
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -192,6 +202,10 @@ class MotionConfig:
             "max_z_mm": self.max_z_mm,
             "transit_cartesian_step_mm": self.transit_cartesian_step_mm,
             "follow_tolerance_deg": self.follow_tolerance_deg,
+            "goal_velocity_by_profile": dict(self.goal_velocity_by_profile),
+            "waypoint_min_dwell_s_by_profile": dict(
+                self.waypoint_min_dwell_s_by_profile
+            ),
         }
 
 
@@ -402,10 +416,18 @@ class MotionController:
             # 详细日志上下文（_wait_for_target 内记录 readback 用）
             self._goal_id_for_log = goal.goal_id
             self._waypoint_index_for_log = index
+            minimum_dwell_s = (
+                self._config.waypoint_min_dwell_s_by_profile.get(
+                    goal.speed_profile, 0.0
+                )
+                if index != last_index
+                else 0.0
+            )
             converged = self._wait_for_target(
                 waypoint,
                 tolerance_deg=tolerance,
                 stable_samples=1 if use_follow else self._config.stable_samples,
+                minimum_dwell_s=minimum_dwell_s,
             )
             if converged is None:
                 if self._detail_log is not None:
@@ -599,6 +621,7 @@ class MotionController:
         *,
         tolerance_deg: float | None = None,
         stable_samples: int | None = None,
+        minimum_dwell_s: float = 0.0,
     ) -> JointVector | None:
         tolerance = (
             self._config.joint_tolerance_deg if tolerance_deg is None else tolerance_deg
@@ -606,7 +629,12 @@ class MotionController:
         required_stable = (
             self._config.stable_samples if stable_samples is None else stable_samples
         )
-        deadline = self._monotonic() + self._config.waypoint_timeout_s
+        minimum_dwell = _finite(minimum_dwell_s, "minimum_dwell_s")
+        if minimum_dwell < 0.0:
+            raise ValueError("minimum_dwell_s 不能小于零")
+        started = self._monotonic()
+        not_before = started + minimum_dwell
+        deadline = started + self._config.waypoint_timeout_s
         stable = 0
         latest: JointVector | None = None
         reads = 0
@@ -627,7 +655,10 @@ class MotionController:
                         max_error=max(error.values(), default=0.0),
                         tolerance_deg=tolerance,
                     )
-                if latest.max_abs_error(target) <= tolerance:
+                if (
+                    self._monotonic() >= not_before
+                    and latest.max_abs_error(target) <= tolerance
+                ):
                     stable += 1
                     if stable >= required_stable:
                         return latest

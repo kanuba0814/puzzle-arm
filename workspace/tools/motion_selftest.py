@@ -21,9 +21,14 @@ PARK_POSE = "/opt/epuzzle/workspace/calibration/park_pose_single_arm_20260731.js
 CALIB_DIR = Path("/home/epuzzle/.cache/huggingface/lerobot/calibration/robots/so101_follower_5d")
 
 mc = MotionConfig(
-    15.0, 10.0, 10.0, 3.0, 1, 0.02, 3.0, -20.0, -30.0, 180.0,
+    15.0, 10.0, 10.0, 3.0, 1, 0.05, 3.0, -20.0, -30.0, 180.0,
     transit_cartesian_step_mm=25.0, follow_tolerance_deg=8.0,
-    goal_velocity_by_profile={"EMPTY_NORMAL": 200, "EMPTY_SLOW": 120, "HOLDING_SLOW": 80},
+    goal_velocity_by_profile={"EMPTY_NORMAL": 250, "EMPTY_SLOW": 150, "HOLDING_SLOW": 100},
+    waypoint_min_dwell_s_by_profile={
+        "EMPTY_NORMAL": 0.15,
+        "EMPTY_SLOW": 0.20,
+        "HOLDING_SLOW": 0.30,
+    },
 )
 
 adapter = InspectionHardwareAdapter(

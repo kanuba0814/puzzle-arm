@@ -113,7 +113,7 @@ MAX_MAGNET_SETTLE_S = 5.0
 def motion_config() -> MotionConfig:
     """快速巡检档：15 mm 插值，关节步长仍严格不超过 10°。
 
-    梯形速度：SAFE 空载 200 LSB ≈ 35°/s 峰值，PICK/PLACE 60 LSB ≈ 10.6°/s。
+    梯形速度：空载巡航 250 LSB（约 44°/s），接近 150 LSB，持物 100 LSB。
     """
     return MotionConfig(
         15.0,
@@ -121,28 +121,34 @@ def motion_config() -> MotionConfig:
         10.0,
         3.0,
         1,
-        0.02,
+        0.05,
         3.0,
         -20.0,
         -30.0,
         180.0,
         goal_velocity_by_profile={
-            "EMPTY_NORMAL": 200,
-            "EMPTY_SLOW": 120,
-            "HOLDING_SLOW": 80,
+            "EMPTY_NORMAL": 250,
+            "EMPTY_SLOW": 150,
+            "HOLDING_SLOW": 100,
+        },
+        waypoint_min_dwell_s_by_profile={
+            "EMPTY_NORMAL": 0.15,
+            "EMPTY_SLOW": 0.20,
+            "HOLDING_SLOW": 0.30,
+            "LOCAL_POLICY": 0.15,
         },
     )
 
 
 def pick_place_motion_config() -> MotionConfig:
-    """抓放档：非接触转移用 40mm 大步长 + 8° 跟随，减少路点数；
+    """抓放档：非接触转移用 25mm 大步长 + 8° 跟随，减少路点数；
     接触目标（PICK/PLACE）仍用 15mm 精细分段 + 3° 严格容差。
 
     跟随容差只用于非接触转移；MotionController 对 PICK/PLACE phase 强制
     忽略跟随容差，因为负载下宽门槛会使 TCP 提前 10-20 mm 判到位。
 
-    梯形速度：EMPTY_NORMAL 200 LSB（35°/s）空载快速转移，EMPTY_SLOW 120
-    （21°/s）接近，HOLDING_SLOW 80（14°/s）负载慢速，减少冲击与滑移。
+    梯形速度：EMPTY_NORMAL 250、EMPTY_SLOW 150、HOLDING_SLOW 100 LSB；
+    持物档保持较慢，避免冲击和滑移。
     """
     return MotionConfig(
         max_cartesian_step_mm=15.0,
@@ -150,17 +156,23 @@ def pick_place_motion_config() -> MotionConfig:
         max_joint_step_deg=10.0,
         joint_tolerance_deg=3.0,
         stable_samples=1,
-        poll_interval_s=0.02,
-        waypoint_timeout_s=3.0,
+        poll_interval_s=0.05,
+        waypoint_timeout_s=8.0,
         safe_min_z_mm=-20.0,
         contact_min_z_mm=-30.0,
         max_z_mm=180.0,
-        transit_cartesian_step_mm=25.0,  # 转移步长；40mm 曾使单步关节跳 10.14° 超限
+        transit_cartesian_step_mm=25.0,
         follow_tolerance_deg=8.0,
         goal_velocity_by_profile={
-            "EMPTY_NORMAL": 200,
-            "EMPTY_SLOW": 120,
-            "HOLDING_SLOW": 80,
+            "EMPTY_NORMAL": 250,
+            "EMPTY_SLOW": 150,
+            "HOLDING_SLOW": 100,
+        },
+        waypoint_min_dwell_s_by_profile={
+            "EMPTY_NORMAL": 0.15,
+            "EMPTY_SLOW": 0.20,
+            "HOLDING_SLOW": 0.30,
+            "LOCAL_POLICY": 0.15,
         },
     )
 
