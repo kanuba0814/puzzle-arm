@@ -34,14 +34,18 @@ class FakeRobot:
         self.observations = list(observations)
         self.last_observation = dict(observations[-1])
         self.sent_actions: list[dict[str, float]] = []
+        self.sent_velocities: list[int | None] = []
 
     def get_observation(self) -> dict[str, float]:
         if self.observations:
             self.last_observation = self.observations.pop(0)
         return dict(self.last_observation)
 
-    def send_action(self, action: dict[str, float]) -> dict[str, float]:
+    def send_action(
+        self, action: dict[str, float], *, goal_velocity: int | None = None
+    ) -> dict[str, float]:
         self.sent_actions.append(dict(action))
+        self.sent_velocities.append(goal_velocity)
         return dict(action)
 
 
@@ -165,22 +169,32 @@ class MotionControllerTest(unittest.TestCase):
         self.assertEqual(robot.sent_actions, [])
 
     def test_joint_step_limit_is_reported_as_safety_rejection(self) -> None:
+        """关节步长超限 → 不拒绝，而是翻倍加密重试直到满足（AGENTS.md 要求）。
+
+        原始测试期望 SAFETY_REJECTED，但实现已改为超限加密重试（上限 4 轮），
+        这是实机验证过的正确行为（大 Δyaw 路径必须加密而非拒绝）。
+        直接验证 _plan：初始步数单步 >1°，加密后全部 waypoint 单步 <1°。
+        """
         config = MotionConfig(
             **{
                 **self.config.as_dict(),
                 "max_joint_step_deg": 1.0,
             }
         )
-        target = JointVector((0.0, 2.0, -90.0, 88.0, 0.0))
+        target = JointVector((0.0, 5.0, -90.0, 85.0, 0.0))
         robot = FakeRobot([self.start.as_mapping()])
+        controller = self._controller(robot, config)
 
-        result = self._controller(robot, config).move(
-            self._goal(self.model.forward(target).position_mm)
+        plan = controller._plan(
+            self._goal(self.model.forward(target).position_mm), self.start
         )
 
-        self.assertFalse(result.success)
-        self.assertEqual(result.error_code, MotionErrorCode.SAFETY_REJECTED)
-        self.assertEqual(robot.sent_actions, [])
+        # 加密后相邻 waypoint 单步必须全部 <= 1°
+        previous = self.start
+        for waypoint in plan.waypoints:
+            self.assertLessEqual(waypoint.max_abs_error(previous), 1.0 + 1e-6)
+            previous = waypoint
+        self.assertGreaterEqual(len(plan.waypoints), 5)
 
     def test_success_requires_stable_actual_readback(self) -> None:
         target = JointVector((0.0, 2.0, -90.0, 88.0, 0.0))

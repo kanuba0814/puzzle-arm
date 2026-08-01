@@ -59,14 +59,17 @@ class AcceptedCalibrationReplayTest(unittest.TestCase):
     def test_practical_limits_are_not_derived_from_contact_envelope(self) -> None:
         calibration = ArmCalibration.load(self.calibration_path)
 
+        # 2026-08-01 实测放宽：elbow_flex 舵机行程 196.7°→[-95,95]；
+        # wrist_roll 改装后无物理阻挡（Min/Max 寄存器 0..4095=360.4°）→[-180,180]。
+        # 断言与标定文件一致（限位来自舵机行程实测，不是接触包络推导）。
         self.assertEqual(
             calibration.geometry.joint_limits_deg,
             (
                 (-110.0, 110.0),
                 (-100.0, 100.0),
-                (-90.0, 90.0),
                 (-95.0, 95.0),
-                (-145.0, -20.0),
+                (-95.0, 95.0),
+                (-180.0, 180.0),
             ),
         )
 
