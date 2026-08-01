@@ -553,6 +553,7 @@ def config(
         magnet_footprint_clearance_frozen=heights is not None,
         magnet_on_settle_s=None if heights is None else heights.magnet_on_settle_s,
         magnet_off_settle_s=None if heights is None else heights.magnet_off_settle_s,
+        vertical_approach_mm=30.0,
     )
 
 

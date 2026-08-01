@@ -3,10 +3,11 @@
   "title": "SupervisorConfig",
   "type": "object",
   "additionalProperties": false,
-  "required": ["calibration_path", "park_pose_path", "transform_path", "transform_is_official", "z_safe_mm", "z_pregrasp_mm", "z_pick_mm", "z_place_mm", "max_vision_age_ms", "global_timeout_s", "shadow", "automatic_pick_place_enabled"],
+  "required": ["calibration_path", "park_pose_path", "transform_path", "transform_is_official", "z_safe_mm", "z_pregrasp_mm", "vertical_approach_mm", "z_pick_mm", "z_place_mm", "max_vision_age_ms", "global_timeout_s", "shadow", "automatic_pick_place_enabled"],
   "properties": {
     "calibration_path": {"type": "string"}, "park_pose_path": {"type": "string"}, "transform_path": {"type": "string"},
     "transform_is_official": {"type": "boolean"}, "z_safe_mm": {"type": "number"}, "z_pregrasp_mm": {"type": "number"},
+    "vertical_approach_mm": {"const": 30.0},
     "z_pick_mm": {"type": ["number", "null"]}, "z_place_mm": {"type": ["number", "null"]},
     "max_vision_age_ms": {"type": ["integer", "null"], "minimum": 0}, "global_timeout_s": {"type": "number", "exclusiveMinimum": 0},
     "shadow": {"type": "boolean"}, "automatic_pick_place_enabled": {"type": "boolean"}

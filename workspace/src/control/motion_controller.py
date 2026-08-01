@@ -68,6 +68,8 @@ class LowHeightPoseLock:
     pitch_tolerance_deg: float = 5.0
     wrist_limit_margin_deg: float = 15.0
     max_entry_xy_error_mm: float = 2.0
+    # 下降超差回入口；抬升超差继续到更安全的目标端。
+    recovery_to_target: bool = False
 
     def __post_init__(self) -> None:
         for name in (
@@ -101,6 +103,8 @@ class LowHeightPoseLock:
                 raise ValueError(f"{name} 必须大于零")
         if self.cartesian_step_mm > self.vertical_distance_mm:
             raise ValueError("cartesian_step_mm 不能大于 vertical_distance_mm")
+        if not isinstance(self.recovery_to_target, bool):
+            raise ValueError("recovery_to_target 必须是布尔值")
 
 
 class MotionErrorCode(str, Enum):
@@ -478,9 +482,14 @@ class MotionController:
                         goal.goal_id, index, waypoint.max_abs_error(final)
                     )
                 if wait_failure is not None and goal.path_constraint is not None:
+                    recovery_targets = (
+                        plan.waypoints[index:]
+                        if goal.path_constraint.recovery_to_target
+                        else tuple((*reversed(executed_targets), entry))
+                    )
                     recovered, recovery_final = self._recover_locked_path(
                         goal,
-                        tuple((*reversed(executed_targets), entry)),
+                        recovery_targets,
                         goal.path_constraint,
                     )
                     return self._result(
@@ -492,7 +501,11 @@ class MotionController:
                             else MotionErrorCode.POSE_LOCK_RECOVERY_FAILED
                         ),
                         message=(
-                            f"{wait_failure}；已退回入口"
+                            (
+                                f"{wait_failure}；已继续退回目标安全端"
+                                if goal.path_constraint.recovery_to_target
+                                else f"{wait_failure}；已退回入口"
+                            )
                             if recovered
                             else f"{wait_failure}；锁定路径退回失败"
                         ),

@@ -5,7 +5,12 @@ import unittest
 from pathlib import Path
 
 from control.kinematics import JointVector, ToolPose
-from control.motion_controller import MotionConfig, MotionErrorCode, MotionResult
+from control.motion_controller import (
+    LowHeightPoseLock,
+    MotionConfig,
+    MotionErrorCode,
+    MotionResult,
+)
 from integration import (
     PlacementPlanRef,
     Supervisor,
@@ -146,6 +151,108 @@ class SupervisorGateTest(unittest.TestCase):
         with self.assertRaises(SupervisorFailure) as mismatch:
             supervisor.validate_plan(PlacementPlanRef("other", 0))
         self.assertEqual(mismatch.exception.code, SupervisorErrorCode.PLAN_STALE)
+
+    def test_grasp_fsm_locks_all_four_thirty_mm_vertical_segments(self) -> None:
+        class Motion:
+            def __init__(self) -> None:
+                self.goals: list[object] = []
+
+            def move(self, goal: object) -> MotionResult:
+                self.goals.append(goal)
+                position = goal.position_mm  # type: ignore[union-attr]
+                joints = JointVector(
+                    (
+                        position[0],
+                        position[1],
+                        position[2],
+                        goal.pitch_deg,  # type: ignore[union-attr]
+                        goal.yaw_deg,  # type: ignore[union-attr]
+                    )
+                )
+                return MotionResult(
+                    goal.goal_id,  # type: ignore[union-attr]
+                    0,
+                    True,
+                    MotionErrorCode.NONE,
+                    "ok",
+                    "fake-calibration",
+                    1,
+                    1,
+                    joints.as_mapping(),
+                )
+
+        class Kinematics:
+            def forward(self, joints: JointVector) -> ToolPose:
+                values = joints.values_deg
+                return ToolPose(
+                    "robot_base_mm",
+                    (values[0], values[1], values[2]),
+                    values[3],
+                    values[4],
+                )
+
+            def inverse(self, pose: ToolPose) -> JointVector:
+                return JointVector(
+                    (
+                        pose.position_mm[0],
+                        pose.position_mm[1],
+                        pose.position_mm[2],
+                        pose.pitch_deg,
+                        pose.yaw_deg,
+                    )
+                )
+
+        config = SupervisorConfig(
+            **{
+                **self.config.__dict__,
+                "z_pick_mm": 0.0,
+                "z_place_mm": 5.0,
+                "automatic_pick_place_enabled": True,
+                "transform_is_official": True,
+                "magnet_footprint_clearance_frozen": True,
+                "magnet_on_settle_s": 0.0,
+                "magnet_off_settle_s": 0.0,
+            }
+        )
+        motion = Motion()
+        magnet = Magnet()
+        supervisor = Supervisor(
+            config,
+            motion,  # type: ignore[arg-type]
+            None,
+            magnet,
+            Vision(self.batch),
+            None,
+            monotonic=self.clock.monotonic,
+            monotonic_ns=self.clock.monotonic_ns,
+            sweep_kinematics=Kinematics(),
+        )
+        supervisor.scan()
+        pick = ToolPose("robot_base_mm", (100.0, 20.0, 0.0), -90.0, 10.0)
+        place = ToolPose("robot_base_mm", (120.0, 30.0, 5.0), -90.0, 20.0)
+
+        supervisor.grasp_fsm(
+            PlacementPlanRef("image-sha", 0),
+            piece=PieceRef("piece-1", (105.0, 148.5)),
+            pick_pose=pick,
+            place_pose=place,
+        )
+
+        locked_goals = [
+            goal
+            for goal in motion.goals
+            if isinstance(goal.path_constraint, LowHeightPoseLock)  # type: ignore[union-attr]
+        ]
+        self.assertEqual(len(locked_goals), 4)
+        self.assertEqual(
+            [goal.position_mm[2] for goal in locked_goals],  # type: ignore[union-attr]
+            [0.0, 30.0, 5.0, 35.0],
+        )
+        self.assertEqual(
+            [goal.path_constraint.recovery_to_target for goal in locked_goals],  # type: ignore[union-attr]
+            [False, True, False, True],
+        )
+        self.assertEqual(magnet.calls, [True, False])
 
     def test_sweep_segment_preflight_rejects_before_park_or_servo_action(self) -> None:
         class Motion:

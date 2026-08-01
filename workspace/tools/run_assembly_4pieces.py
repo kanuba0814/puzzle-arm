@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """四片连续拼装执行器（带 yaw 补偿）。
 
-基于 123 求解结果，逐片执行 PICK → PLACE，传入正确的末端 yaw。
-IK 自动计算 roll = yaw_target - pan，补偿机械臂旋转。
+基于 123 求解结果，逐片执行 PICK → PLACE。J1/J5 的实际方向关系
+只由冻结运动学模型消费，调用方不再叠加方向补丁。
 
 用法（Pi 上，/opt/epuzzle 下）：
     sudo PYTHONPATH=/opt/epuzzle/workspace/src/robot_plugin/lerobot_robot_so101_5d:/opt/epuzzle/workspace/src \
@@ -17,7 +17,6 @@ import json
 import sys
 import time
 
-import numpy as np
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -45,7 +44,7 @@ from integration.runtime_adapter import (  # noqa: E402
     PREGRASP_HEIGHT_MM,
     SAFE_HEIGHT_MM,
 )
-from integration.sweep_planner import PieceRef, preflight_continuous_sweep  # noqa: E402
+from integration.sweep_planner import PieceRef  # noqa: E402
 from integration.supervisor import VisionBatch  # noqa: E402
 
 CALIBRATION_PATH = _WORKSPACE / "calibration/arm_kinematics_single_arm_accepted_20260731.json"
@@ -62,6 +61,18 @@ class PickPlaceContactHeights:
     place_mm: float
     magnet_on_settle_s: float
     magnet_off_settle_s: float
+
+
+def relative_tool_yaws(
+    pick_yaw_robot_deg: float,
+    source_yaw_table_deg: float,
+    target_yaw_table_deg: float,
+) -> tuple[float, float]:
+    """由修正后的运动学模型一次性消费求解器相对旋转角。"""
+    delta_yaw = (
+        target_yaw_table_deg - source_yaw_table_deg + 180.0
+    ) % 360.0 - 180.0
+    return pick_yaw_robot_deg, pick_yaw_robot_deg + delta_yaw
 
 
 def load_pick_place_heights() -> PickPlaceContactHeights:
@@ -132,6 +143,7 @@ def make_config(
         magnet_footprint_clearance_frozen=heights is not None,
         magnet_on_settle_s=None if heights is None else heights.magnet_on_settle_s,
         magnet_off_settle_s=None if heights is None else heights.magnet_off_settle_s,
+        vertical_approach_mm=30.0,
     )
 
 
@@ -201,117 +213,35 @@ def main() -> None:
         lerobot_calibration_dir=args.lerobot_calibration,
         motion_config=pick_place_motion_config(),
         # 详细运动日志：目标位姿/规划/逐 waypoint 读回/收敛误差
-        motion_detail_log_dir=Path("/opt/epuzzle/workspace/logs/motion_detail"),
+        motion_detail_log_dir=_WORKSPACE / "logs/motion_detail",
     )
     print(f"详细运动日志: {adapter.motion_detail_log.path if adapter.motion_detail_log else 'disabled'}")
 
-    # table_mm -> robot_base_mm 的坐标系旋转（contact_sheet_to_robot_base 标定）
-    TABLE_TO_ROBOT_YAW_DEG = 4.43177
-
-    def yaw_pose(ref: PieceRef, height: float, yaw_table_deg: float) -> ToolPose:
-        """构造带 yaw 的 ToolPose。
-
-        yaw_table_deg 是 0° 基准下的碎片朝向（求解器相对角或 0），
-        ToolPose.yaw_deg 必须是 robot_base_mm 系（kinematics 里 yaw = pan + roll），
-        因此加 TABLE_TO_ROBOT_YAW_DEG 做坐标系旋转。
-        """
+    def yaw_pose(ref: PieceRef, height: float, yaw_robot_deg: float) -> ToolPose:
+        """构造 robot_base_mm 中由统一运动学模型消费的 yaw 位姿。"""
         base = adapter.pose_for(ref, height)
         return ToolPose(
             base.frame,
             base.position_mm,
             base.pitch_deg,
-            yaw_table_deg + TABLE_TO_ROBOT_YAW_DEG,
+            yaw_robot_deg,
         )
 
-    def place_yaw_with_roll_compensation(
+    def place_yaws_from_model(
         src_ref: PieceRef,
-        tgt_ref: PieceRef,
         src_yaw_table: float,
         tgt_yaw_table: float,
     ) -> tuple[float, float]:
-        """计算 PICK/PLACE 的 robot 系 yaw，保证碎片旋转 ≡ Δyaw (mod 360)。
-
-        0° 基准约定：src_yaw_table 恒为 0（不测量碎片绝对朝向），
-        tgt_yaw_table 即求解器相对旋转角。
-
-        物理约束：wrist_roll 单圈（STS3215 0..4095 ticks），逻辑限位 [-180,180]
-        → 物理限位 [logical*direction+offset] = [-262.15, +97.85]（direction=-1,
-        offset=-82.15）。碎片旋转 = 末端 yaw 变化 = Δpan + Δroll_physical，
-        必须等于求解器 Δyaw（模 360）。Δyaw 等价角 {Δyaw, Δyaw±360} 中选
-        使物理 roll 落入限位的那个。
-        """
-        geom = adapter.kinematics.geometry
-        roll_dir = geom.joint_directions[4]
-        roll_off = geom.joint_zero_offsets_deg[4]
-        roll_limits_logical = geom.joint_limits_deg[4]
-        # 物理限位 = 逻辑*direction + offset
-        roll_lo = min(roll_limits_logical[0] * roll_dir + roll_off,
-                      roll_limits_logical[1] * roll_dir + roll_off)
-        roll_hi = max(roll_limits_logical[0] * roll_dir + roll_off,
-                      roll_limits_logical[1] * roll_dir + roll_off)
-
-        # PICK yaw：用 pose_for 径向默认 yaw（robot 系），保证 HOME→PICK
-        # 路径平滑。实机发现：用视觉 angle_deg 作为 PICK yaw 时，某些位置
-        # （如右上角 piece_03 yaw=73°）IK 出现多解突变，lift 单步跳 47°。
-        # 碎片被磁铁吸住后跟随磁头转，最终朝向由 PLACE yaw = PICK yaw + Δyaw
-        # 决定，PICK 的绝对 yaw 不影响拼接结果。
-        # （0° 基准：碎片初始朝向视为 0，Δyaw = tgt_yaw − 0 即求解器相对角，
-        #   碎片相对桌面旋转 = 磁头 yaw 变化 = Δpan + Δroll。）
-        pick_base = adapter.pose_for(src_ref, 60.0)
-        pick_yaw = pick_base.yaw_deg  # 径向默认（robot 系）
-        pick_pose = ToolPose(
-            pick_base.frame,
-            pick_base.position_mm,
-            pick_base.pitch_deg,
-            pick_yaw,
+        """模型已包含 J5 方向；调用方只应用一次求解器相对 yaw。"""
+        pick_yaw = adapter.pose_for(src_ref, SAFE_HEIGHT_MM).yaw_deg
+        pick_yaw, place_yaw = relative_tool_yaws(
+            pick_yaw, src_yaw_table, tgt_yaw_table
         )
-        pick_jv = adapter.kinematics.inverse(pick_pose)
-        pm = pick_jv.as_mapping()
-        pan_pick_log = pm["shoulder_pan.pos"]
-        roll_pick_log = pm["wrist_roll.pos"]
-        # 物理角
-        pan_pick_phys = pan_pick_log * geom.joint_directions[0] + geom.joint_zero_offsets_deg[0]
-        roll_pick_phys = roll_pick_log * roll_dir + roll_off
-
-        # PLACE pan（位置决定，与 yaw 无关）
-        place_base = adapter.pose_for(tgt_ref, 60.0)
-        pan_place_phys = float(
-            np.degrees(
-                np.arctan2(place_base.position_mm[1], place_base.position_mm[0])
-            )
+        print(
+            f"    模型 yaw: pick={pick_yaw:+.1f}° → place={place_yaw:+.1f}° "
+            f"(Δ={place_yaw - pick_yaw:+.1f}°)"
         )
-        delta_yaw = (tgt_yaw_table - src_yaw_table + 180.0) % 360.0 - 180.0
-        candidates = [delta_yaw, delta_yaw + 360.0, delta_yaw - 360.0]
-        chosen: float | None = None
-        chosen_roll: float = 0.0
-        for cand in candidates:
-            roll_place_phys = roll_pick_phys + cand - (pan_place_phys - pan_pick_phys)
-            if roll_lo - 1e-6 <= roll_place_phys <= roll_hi + 1e-6:
-                chosen = cand
-                chosen_roll = roll_place_phys
-                print(
-                    f"    补偿: Δyaw={delta_yaw:.1f}° 取等价角 {cand:+.1f}° | "
-                    f"pan_phys {pan_pick_phys:+.1f}→{pan_place_phys:+.1f} | "
-                    f"roll_phys {roll_pick_phys:+.1f}→{roll_place_phys:+.1f} ✓"
-                )
-                break
-        if chosen is None:
-            # 兜底：取最接近限位的等价角
-            best_cand = None
-            best_dist = 1e9
-            for cand in candidates:
-                rp = roll_pick_phys + cand - (pan_place_phys - pan_pick_phys)
-                dist = max(0.0, roll_lo - rp, rp - roll_hi)
-                if dist < best_dist:
-                    best_dist = dist
-                    best_cand = cand
-                    chosen_roll = rp
-            chosen = best_cand
-            print(
-                f"    ⚠ 补偿: 无限位内等价角，取 {chosen:+.1f}° | "
-                f"roll_phys {roll_pick_phys:+.1f}→{chosen_roll:+.1f} (越限 {best_dist:.1f}°)"
-            )
-        return pick_yaw, pick_yaw + chosen
+        return pick_yaw, place_yaw
 
     # 全路径 IK 预检：逐点可达性（不检查相邻点步长——
     # MotionController.move 有翻倍加密重试，AGENTS.md 记录过 preflight
@@ -320,15 +250,21 @@ def main() -> None:
     for p in pieces:
         src_ref = PieceRef(p["piece_id"], p["src_mm"])
         tgt_ref = PieceRef(f"{p['piece_id']}-place", p["tgt_mm"])
+        pick_yaw_robot, place_yaw_robot = place_yaws_from_model(
+            src_ref, p["src_yaw"], p["tgt_yaw"]
+        )
         waypoints += [
-            yaw_pose(src_ref, SAFE_HEIGHT_MM, p["src_yaw"]),
-            yaw_pose(src_ref, PREGRASP_HEIGHT_MM, p["src_yaw"]),
-            yaw_pose(src_ref, heights.pick_mm, p["src_yaw"]),
-            yaw_pose(src_ref, SAFE_HEIGHT_MM, p["src_yaw"]),
-            yaw_pose(tgt_ref, SAFE_HEIGHT_MM, p["tgt_yaw"]),
-            yaw_pose(tgt_ref, PREGRASP_HEIGHT_MM, p["tgt_yaw"]),
-            yaw_pose(tgt_ref, heights.place_mm, p["tgt_yaw"]),
-            yaw_pose(tgt_ref, SAFE_HEIGHT_MM, p["tgt_yaw"]),
+            yaw_pose(src_ref, SAFE_HEIGHT_MM, pick_yaw_robot),
+            yaw_pose(src_ref, heights.pick_mm + 30.0, pick_yaw_robot),
+            yaw_pose(src_ref, heights.pick_mm, pick_yaw_robot),
+            yaw_pose(src_ref, heights.pick_mm + 30.0, pick_yaw_robot),
+            yaw_pose(src_ref, SAFE_HEIGHT_MM, pick_yaw_robot),
+            yaw_pose(tgt_ref, SAFE_HEIGHT_MM, pick_yaw_robot),
+            yaw_pose(tgt_ref, SAFE_HEIGHT_MM, place_yaw_robot),
+            yaw_pose(tgt_ref, heights.place_mm + 30.0, place_yaw_robot),
+            yaw_pose(tgt_ref, heights.place_mm, place_yaw_robot),
+            yaw_pose(tgt_ref, heights.place_mm + 30.0, place_yaw_robot),
+            yaw_pose(tgt_ref, SAFE_HEIGHT_MM, place_yaw_robot),
         ]
     waypoints.append(adapter.home_pose())
     print("\n全路径 IK 预检（逐点可达性）...")
@@ -392,31 +328,23 @@ def main() -> None:
                 except (OSError, json.JSONDecodeError):
                     done = set()
             if p["piece_id"] in done:
-                print(f"  跳过（已完成）")
+                print("  跳过（已完成）")
                 continue
             src_ref = PieceRef(p["piece_id"], p["src_mm"])
             tgt_ref = PieceRef(f"{p['piece_id']}-place", p["tgt_mm"])
-            # 旋转补偿：选 Δyaw 等价角使 roll 在限位内，保证碎片旋转 ≡ Δyaw
-            pick_yaw_robot, place_yaw_robot = place_yaw_with_roll_compensation(
-                src_ref, tgt_ref, p["src_yaw"], p["tgt_yaw"]
+            pick_yaw_robot, place_yaw_robot = place_yaws_from_model(
+                src_ref, p["src_yaw"], p["tgt_yaw"]
             )
-            pick_pose = yaw_pose(src_ref, heights.pick_mm, p["src_yaw"])
-            # 用补偿后的 robot 系 yaw 覆盖 pick/place 姿态
-            pick_pose = ToolPose(
-                pick_pose.frame, pick_pose.position_mm, pick_pose.pitch_deg, pick_yaw_robot
-            )
-            place_pose = yaw_pose(tgt_ref, heights.place_mm, p["tgt_yaw"])
-            place_pose = ToolPose(
-                place_pose.frame, place_pose.position_mm, place_pose.pitch_deg, place_yaw_robot
-            )
-            # 验证实际碎片旋转 = Δyaw（模 360）
+            pick_pose = yaw_pose(src_ref, heights.pick_mm, pick_yaw_robot)
+            place_pose = yaw_pose(tgt_ref, heights.place_mm, place_yaw_robot)
+            # 统一模型回放验证；调用方不再重复补偿 J1/J5 方向。
             pick_jv = adapter.kinematics.inverse(pick_pose)
             place_jv = adapter.kinematics.inverse(place_pose)
-            pm = pick_jv.as_mapping()
-            lm = place_jv.as_mapping()
-            actual_rot = (lm["shoulder_pan.pos"] + lm["wrist_roll.pos"]) - (
-                pm["shoulder_pan.pos"] + pm["wrist_roll.pos"]
-            )
+            pick_actual_yaw = adapter.kinematics.forward(pick_jv).yaw_deg
+            place_actual_yaw = adapter.kinematics.forward(place_jv).yaw_deg
+            actual_rot = (
+                place_actual_yaw - pick_actual_yaw + 180.0
+            ) % 360.0 - 180.0
             delta_yaw = (p["tgt_yaw"] - p["src_yaw"] + 180.0) % 360.0 - 180.0
             ok = abs((actual_rot - delta_yaw + 180.0) % 360.0 - 180.0) < 0.5
             print(

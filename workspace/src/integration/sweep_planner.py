@@ -73,6 +73,8 @@ def plan_sweep_order(
 
 
 class SweepKinematics(Protocol):
+    def forward(self, joints: JointVector) -> ToolPose: ...
+
     def inverse(self, pose: ToolPose) -> JointVector: ...
 
 

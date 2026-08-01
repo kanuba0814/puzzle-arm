@@ -84,7 +84,8 @@
         "yaw_tolerance_deg",
         "pitch_tolerance_deg",
         "wrist_limit_margin_deg",
-        "max_entry_xy_error_mm"
+        "max_entry_xy_error_mm",
+        "recovery_to_target"
       ],
       "properties": {
         "yaw_robot_deg": {
@@ -121,6 +122,9 @@
         "max_entry_xy_error_mm": {
           "type": "number",
           "exclusiveMinimum": 0
+        },
+        "recovery_to_target": {
+          "type": "boolean"
         }
       }
     }

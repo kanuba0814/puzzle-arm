@@ -4,7 +4,7 @@ import time
 import unittest
 from pathlib import Path
 
-from control.kinematics import ArmGeometry, JointVector, PlanarArmKinematics
+from control.kinematics import ArmGeometry, JointVector, PlanarArmKinematics, ToolPose
 from control.motion_controller import (
     MotionConfig,
     LowHeightPoseLock,
@@ -249,6 +249,56 @@ class MotionControllerTest(unittest.TestCase):
         self.assertIn("已退回入口", result.message)
         self.assertEqual(robot.sent_actions[-1], start.as_mapping())
         self.assertEqual(result.final_joint_deg, start.as_mapping())
+
+    def test_locked_ascent_pose_drift_continues_to_safe_target(self) -> None:
+        safe = JointVector((0.0, 20.0, -80.0, 60.0, 0.0))
+        safe_pose = self.model.forward(safe)
+        contact_pose = ToolPose(
+            safe_pose.frame,
+            (
+                safe_pose.position_mm[0],
+                safe_pose.position_mm[1],
+                safe_pose.position_mm[2] - 30.0,
+            ),
+            safe_pose.pitch_deg,
+            safe_pose.yaw_deg,
+        )
+        contact = self.model.inverse(contact_pose)
+        lock = LowHeightPoseLock(
+            yaw_robot_deg=safe_pose.yaw_deg,
+            pitch_robot_deg=safe_pose.pitch_deg,
+            entry_xy_robot_mm=safe_pose.position_mm[:2],
+            recovery_to_target=True,
+        )
+        goal = MotionGoal(
+            **{
+                **self._goal(safe_pose.position_mm, phase="SAFE").__dict__,
+                "pitch_deg": lock.pitch_robot_deg,
+                "yaw_deg": lock.yaw_robot_deg,
+                "path_constraint": lock,
+            }
+        )
+        config = MotionConfig(
+            **{
+                **self.config.as_dict(),
+                "contact_min_z_mm": -100.0,
+                "joint_tolerance_deg": 0.2,
+            }
+        )
+        robot = PoseDriftRobot(contact.as_mapping(), fail_on_send=3)
+
+        result = self._controller(robot, config).move(goal)
+
+        self.assertFalse(result.success)
+        self.assertEqual(result.error_code, MotionErrorCode.POSE_LOCK_TRACKING_ERROR)
+        self.assertIn("目标安全端", result.message)
+        self.assertLess(
+            JointVector.from_mapping(robot.sent_actions[-1]).max_abs_error(safe), 1e-9
+        )
+        assert result.final_joint_deg is not None
+        self.assertLess(
+            JointVector.from_mapping(result.final_joint_deg).max_abs_error(safe), 1e-9
+        )
 
     def test_locked_vertical_rejects_lateral_target_before_motion(self) -> None:
         start = JointVector((0.0, 20.0, -80.0, 60.0, 0.0))

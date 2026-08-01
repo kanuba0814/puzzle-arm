@@ -13,13 +13,19 @@ import json
 import time
 import uuid
 from collections.abc import Callable, Mapping
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from enum import Enum
 from pathlib import Path
 from typing import Protocol
 
-from control.kinematics import ToolPose
-from control.motion_controller import MotionConfig, MotionController, MotionGoal
+from control.kinematics import JointVector, ToolPose
+from control.motion_controller import (
+    LowHeightPoseLock,
+    MotionConfig,
+    MotionController,
+    MotionGoal,
+    MotionResult,
+)
 
 from .event_log import JsonlEventLog
 from .park_sequence import JointSpaceParkMover, ParkMoveErrorCode
@@ -78,6 +84,8 @@ class SupervisorErrorCode(str, Enum):
     SHADOW_MODE = "SHADOW_MODE"
     PICK_VERIFY_FAILED = "PICK_VERIFY_FAILED"
     RELEASE_VERIFY_FAILED = "RELEASE_VERIFY_FAILED"
+    POSE_LOCK_TRACKING_ERROR = "POSE_LOCK_TRACKING_ERROR"
+    POSE_LOCK_RECOVERY_FAILED = "POSE_LOCK_RECOVERY_FAILED"
 
 
 @dataclass(frozen=True)
@@ -103,6 +111,7 @@ class SupervisorConfig:
     magnet_footprint_clearance_frozen: bool = False
     magnet_on_settle_s: float | None = None
     magnet_off_settle_s: float | None = None
+    vertical_approach_mm: float = 30.0
 
 
 @dataclass(frozen=True)
@@ -377,17 +386,30 @@ class Supervisor:
         # calibration_sheet_mm。两者跨坐标系，不得直接比较。高度正确性由
         # 调用方 pose_for(piece, heights.pick_mm) 保证，并由全路径 IK 预检兑现。
 
-        pick_pregrasp = self._at_height(pick_pose, self.config.z_pregrasp_mm)
+        pick_approach = self._vertical_approach(pick_pose)
         pick_safe = self._at_height(pick_pose, self.config.z_safe_mm)
-        place_preplace = self._at_height(place_pose, self.config.z_pregrasp_mm)
+        place_approach = self._vertical_approach(place_pose)
         place_safe = self._at_height(place_pose, self.config.z_safe_mm)
 
         magnet_engaged = False
         try:
             self._transition(SupervisorState.LOCAL_GRASP_ALIGN)
             self._move(pick_safe, "SAFE", "EMPTY_NORMAL", piece.piece_id)
-            self._move(pick_pregrasp, "PREGRASP", "EMPTY_SLOW", piece.piece_id)
-            self._move(pick_pose, "PICK", "EMPTY_SLOW", piece.piece_id)
+            pick_entry = self._move(
+                pick_approach, "PREGRASP", "EMPTY_SLOW", piece.piece_id
+            )
+            pick_lock = self._capture_pose_lock(pick_entry, pick_approach)
+            pick_locked = self._with_lock_orientation(pick_pose, pick_lock)
+            pick_locked_approach = self._with_lock_orientation(
+                pick_approach, pick_lock
+            )
+            self._move(
+                pick_locked,
+                "PICK",
+                "EMPTY_SLOW",
+                piece.piece_id,
+                path_constraint=pick_lock,
+            )
 
             self._transition(SupervisorState.MAGNET_ON)
             self._magnet.set_enabled(True)
@@ -398,6 +420,13 @@ class Supervisor:
             self._settle(self.config.magnet_on_settle_s)
 
             self._transition(SupervisorState.VERIFY_PICK)
+            self._move(
+                pick_locked_approach,
+                "SAFE",
+                "HOLDING_SLOW",
+                piece.piece_id,
+                path_constraint=replace(pick_lock, recovery_to_target=True),
+            )
             self._move(pick_safe, "SAFE", "HOLDING_SLOW", piece.piece_id)
             self._event_log.record(
                 state=self.state.value,
@@ -407,14 +436,7 @@ class Supervisor:
             )
 
             self._transition(SupervisorState.MOVE_PREPLACE)
-            # 两步转移，避免飞行途中旋转撞到机械臂架子：
-            # 1) 保持源 yaw 平移到目标正上方（z_safe）；
-            # 2) 在目标正上方原地旋转到目标 yaw，再下降接触。
-            # 大 Δyaw_cmd（如 -227°）若在直线飞行中线性旋转，中途可能
-            # 扫过架子/障碍物；拆开后旋转只发生在安全高度目标上方。
-            # 注意：pick_pose/place_pose 的 yaw 已由调用方（run_assembly）
-            # 按标准视角（俯视 A4）修正为 Δyaw_cmd = 2*Δpan − Δyaw，
-            # 此处只做插值执行，不再重算方向。
+            # 高空先平移、再在目标正上方旋转；低空 30 mm 不再旋转。
             place_safe_src_yaw = ToolPose(
                 place_safe.frame,
                 place_safe.position_mm,
@@ -425,8 +447,21 @@ class Supervisor:
             self._move(place_safe, "SAFE", "HOLDING_SLOW", piece.piece_id)
 
             self._transition(SupervisorState.LOCAL_PLACE_ALIGN)
-            self._move(place_preplace, "PREPLACE", "HOLDING_SLOW", piece.piece_id)
-            self._move(place_pose, "PLACE", "HOLDING_SLOW", piece.piece_id)
+            place_entry = self._move(
+                place_approach, "PREPLACE", "HOLDING_SLOW", piece.piece_id
+            )
+            place_lock = self._capture_pose_lock(place_entry, place_approach)
+            place_locked = self._with_lock_orientation(place_pose, place_lock)
+            place_locked_approach = self._with_lock_orientation(
+                place_approach, place_lock
+            )
+            self._move(
+                place_locked,
+                "PLACE",
+                "HOLDING_SLOW",
+                piece.piece_id,
+                path_constraint=place_lock,
+            )
 
             self._transition(SupervisorState.RELEASE)
             self._magnet.set_enabled(False)
@@ -437,6 +472,13 @@ class Supervisor:
             self._settle(self.config.magnet_off_settle_s)
 
             self._transition(SupervisorState.VERIFY_PLACE)
+            self._move(
+                place_locked_approach,
+                "SAFE",
+                "EMPTY_SLOW",
+                piece.piece_id,
+                path_constraint=replace(place_lock, recovery_to_target=True),
+            )
             self._move(place_safe, "SAFE", "EMPTY_SLOW", piece.piece_id)
             self._event_log.record(
                 state=self.state.value,
@@ -459,6 +501,57 @@ class Supervisor:
         x, y, _ = pose.position_mm
         return ToolPose(pose.frame, (x, y, height_mm), pose.pitch_deg, pose.yaw_deg)
 
+    def _vertical_approach(self, pose: ToolPose) -> ToolPose:
+        x, y, z = pose.position_mm
+        return ToolPose(
+            pose.frame,
+            (x, y, z + self.config.vertical_approach_mm),
+            pose.pitch_deg,
+            pose.yaw_deg,
+        )
+
+    def _capture_pose_lock(
+        self, result: MotionResult, approach_pose: ToolPose
+    ) -> LowHeightPoseLock:
+        if result.final_joint_deg is None or self._sweep_kinematics is None:
+            raise SupervisorFailure(
+                SupervisorErrorCode.SAFETY_REJECTED,
+                "低空姿态锁缺少入口实际五轴读回或运动学",
+            )
+        try:
+            actual = JointVector.from_mapping(result.final_joint_deg)
+            actual_pose = self._sweep_kinematics.forward(actual)
+        except (ValueError, AttributeError) as exc:
+            raise SupervisorFailure(
+                SupervisorErrorCode.SAFETY_REJECTED,
+                f"低空姿态锁入口 FK 失败: {exc}",
+            ) from exc
+        pitch_vertical_error = abs(
+            (actual_pose.pitch_deg + 90.0 + 180.0) % 360.0 - 180.0
+        )
+        if pitch_vertical_error > 5.0:
+            raise SupervisorFailure(
+                SupervisorErrorCode.SAFETY_REJECTED,
+                f"低空姿态锁入口 pitch 偏离垂直方向 {pitch_vertical_error:.3f}°",
+            )
+        return LowHeightPoseLock(
+            yaw_robot_deg=actual_pose.yaw_deg,
+            pitch_robot_deg=actual_pose.pitch_deg,
+            entry_xy_robot_mm=approach_pose.position_mm[:2],
+            vertical_distance_mm=self.config.vertical_approach_mm,
+        )
+
+    @staticmethod
+    def _with_lock_orientation(
+        pose: ToolPose, pose_lock: LowHeightPoseLock
+    ) -> ToolPose:
+        return ToolPose(
+            pose.frame,
+            pose.position_mm,
+            pose_lock.pitch_robot_deg,
+            pose_lock.yaw_robot_deg,
+        )
+
     def _settle(self, seconds: float | None) -> None:
         if seconds is None:
             raise SupervisorFailure(
@@ -468,8 +561,14 @@ class Supervisor:
             self._sleep(seconds)
 
     def _move(
-        self, pose: ToolPose, phase: str, speed_profile: str, piece_id: str
-    ) -> None:
+        self,
+        pose: ToolPose,
+        phase: str,
+        speed_profile: str,
+        piece_id: str,
+        *,
+        path_constraint: LowHeightPoseLock | None = None,
+    ) -> MotionResult:
         if self._motion is None:
             raise SupervisorFailure(
                 SupervisorErrorCode.SAFETY_REJECTED, "运动控制器未连接"
@@ -488,6 +587,7 @@ class Supervisor:
                 deadline_ns=int(
                     (self._started_at + self.config.global_timeout_s) * 1_000_000_000
                 ),
+                path_constraint=path_constraint,
             )
         )
         self._event_log.record(
@@ -500,6 +600,7 @@ class Supervisor:
             raise SupervisorFailure(
                 SupervisorErrorCode(result.error_code.value), result.message
             )
+        return result
 
     def shadow_plan(self) -> ShadowPlanReport:
         if not self.config.shadow:

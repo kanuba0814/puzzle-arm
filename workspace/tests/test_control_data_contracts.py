@@ -29,6 +29,8 @@ class ControlDataContractsTest(unittest.TestCase):
         self.assertFalse(config["additionalProperties"])
         self.assertFalse(result["additionalProperties"])
         self.assertIn("automatic_pick_place_enabled", config["required"])
+        self.assertIn("vertical_approach_mm", config["required"])
+        self.assertEqual(config["properties"]["vertical_approach_mm"]["const"], 30.0)
         self.assertIn("error_code", result["required"])
         self.assertIn("duration_ms", result["required"])
 
