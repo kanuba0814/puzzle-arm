@@ -38,15 +38,35 @@ from puzzle.solver import (
 
 
 def _find_homography_file() -> Path | None:
-    """查找可用的单应矩阵标定文件（workspace 优先，回退 pi_puzzle）。"""
+    """查找可用的单应矩阵标定文件（workspace 优先，回退 legacy）。
+    
+    Pi 上路径：
+    - /opt/epuzzle/workspace/calibration/*homography*.npy
+    - /home/epuzzle/puzzle/homography.npy（legacy 123项目）
+    
+    宿主上路径：
+    - workspace/calibration/*homography*.npy
+    - pi_puzzle/homography.npy
+    """
     workspace_root = Path(__file__).parent.parent.parent
-    candidates = [
-        workspace_root / "calibration" / "a4_homography.npy",  # 正式标定
-        workspace_root.parent / "pi_puzzle" / "homography.npy",  # Pi 现场标定
-    ]
-    for path in candidates:
-        if path.exists():
-            return path
+    
+    # 优先：workspace/calibration/ 下任何 homography 文件
+    calib_dir = workspace_root / "calibration"
+    if calib_dir.exists():
+        matches = sorted(calib_dir.glob("*homography*.npy"))
+        if matches:
+            return matches[0]
+    
+    # 回退1：../pi_puzzle/homography.npy（宿主机镜像目录）
+    pi_puzzle_path = workspace_root.parent / "pi_puzzle" / "homography.npy"
+    if pi_puzzle_path.exists():
+        return pi_puzzle_path
+    
+    # 回退2：/home/epuzzle/puzzle/homography.npy（Pi 上 legacy 123项目）
+    legacy_pi = Path("/home/epuzzle/puzzle/homography.npy")
+    if legacy_pi.exists():
+        return legacy_pi
+    
     return None
 
 
@@ -254,12 +274,23 @@ def solve_puzzle_123(
     offset = target_center - assembly_center
 
     # 构造 PlacementPlan（per-piece）
+    # 参考点语义：机械臂磁头吸住的是视觉给出的握点 grip_point（最大内切圆
+    # 圆心），不是多边形质心。旋转时碎片绕握点转，因此 PICK/PLACE 的坐标
+    # 必须用握点的变换位置。若用质心（早期版本），大旋转片会因握点-质心
+    # 偏心被放大成 10mm+ 落位偏差（piece_01 实测偏 12mm，偏心 29.7mm）。
     placements = []
     for index, piece in enumerate(pieces):
         rotation, _ = solution["transforms"][index]
-        # 目标中心用拼好的顶点质心，不能用变换的平移向量 t（t 是
-        # 绕原点旋转后的补偿量，本身不是碎片位置）。
-        target_center_mm = np.asarray(placed_verts[index]).mean(axis=0) + offset
+        placed_centroid = np.asarray(placed_verts[index]).mean(axis=0)
+        grip = getattr(piece, "grip_point_table_mm", None)
+        if grip is not None:
+            # 握点在碎片局部坐标 = 检测值 - 质心（检测时碎片未旋转）
+            local_grip = np.asarray(grip) - np.asarray(piece.center_table_mm)
+            # 拼接后握点 = 拼接质心 + R @ 局部握点
+            target_grip = placed_centroid + rotation @ local_grip + offset
+        else:
+            target_grip = placed_centroid + offset
+        target_center_mm = target_grip
         delta_yaw_deg = float(
             np.degrees(np.arctan2(rotation[1, 0], rotation[0, 0]))
         )
@@ -267,7 +298,7 @@ def solve_puzzle_123(
 
         source_pose = Pose2(
             frame="table_mm",
-            center_mm=piece.center_table_mm,
+            center_mm=piece.grip_point_table_mm or piece.center_table_mm,
             yaw_deg=piece.yaw_deg,
         )
         target_pose = Pose2(

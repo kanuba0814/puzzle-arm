@@ -91,8 +91,14 @@ class JointVector:
         return dict(zip(JOINT_FEATURES, self.values_deg, strict=True))
 
     def max_abs_error(self, other: JointVector) -> float:
+        """最大关节误差（度）。
+
+        wrist_roll 放宽到 ±180° 后，主值表示会在边界处翻转（如 177.7° →
+        -178.5° 实际只差 3.8°），用绝对差会误报 356°。因此改用角度差
+        最短距离（wrap 到 [-180, 180]）。
+        """
         return max(
-            abs(left - right)
+            abs((left - right + 180.0) % 360.0 - 180.0)
             for left, right in zip(self.values_deg, other.values_deg, strict=True)
         )
 

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "calibration_id": "single-arm-contact-sheet-v2-20260731",
+  "calibration_id": "single-arm-extended-roll-20260801",
   "robot_type": "so101_follower_5d",
   "source_arm": "so101_follower_modified_single_arm",
   "frame": "robot_base_mm",
@@ -53,8 +53,8 @@
         95.0
       ],
       [
-        -145.0,
-        -20.0
+        -180.0,
+        180.0
       ]
     ]
   },
@@ -64,7 +64,10 @@
     "holdout_samples": 4,
     "holdout_xy_rms_mm": 2.480912,
     "holdout_xy_max_mm": 3.406456,
-    "holdout_z_max_abs_mm": 2.458668
+    "holdout_z_max_abs_mm": 2.458668,
+    "notes": [
+      "2026-08-01: wrist_roll 改装后已无物理阻挡，软限位由 [-145.0, -20.0] 放宽到 [-180, 180]。依据：舵机 Min/Max_Position_Limit 实测 [0, 4095] ticks = 360.4°（其余四轴 197--239°）。放宽前四片拼装因 roll 行程仅 125° 无解。"
+    ]
   },
   "evidence_sha256": [
     "11bf8221865f96242963d58e5af839eb78249ed481c7e0ca829abb5cabb433d4",
