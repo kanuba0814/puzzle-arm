@@ -124,13 +124,16 @@ def main() -> None:
         px, py = robot_to_table(ppose.position_mm)
         lx, ly = robot_to_table(lpose.position_mm)
         dist = np.hypot(lx - t["center_mm"][0], ly - t["center_mm"][1])
-        # 实际旋转（物理角）
+        # 实际碎片旋转（标准视角：俯视 A4，顺时针为正）
+        # 实测硬件方向：pan 物理角增大=俯视逆时针，roll 物理角增大=俯视顺时针
+        # → 实际碎片旋转 = Δroll_phys − Δpan_phys；求解器 Δyaw 以俯视逆时针
+        # 为正，故与目标 −Δyaw 比较。
         pan_p = to_phys(pj["shoulder_pan.pos"], 0, geom)
         roll_p = to_phys(pj["wrist_roll.pos"], 4, geom)
         pan_l = to_phys(lj["shoulder_pan.pos"], 0, geom)
         roll_l = to_phys(lj["wrist_roll.pos"], 4, geom)
-        rot = (pan_l + roll_l) - (pan_p + roll_p)
-        rot_err = (rot - dy + 180) % 360 - 180
+        rot = (roll_l - roll_p) - (pan_l - pan_p)
+        rot_err = (rot + dy + 180) % 360 - 180
         R.append(
             f"| {pid} | ({lx:.1f}, {ly:.1f}) | ({t['center_mm'][0]:.1f}, {t['center_mm'][1]:.1f}) | "
             f"**{dist:.1f} mm** | {rot:+.1f}° | {dy:+.1f}° | {rot_err:+.1f}° |"
@@ -138,7 +141,9 @@ def main() -> None:
     R.append("")
     R.append("## 4. 运动补偿明细（关键参数）")
     R.append("")
-    R.append("旋转补偿公式：`碎片旋转 = (pan_place + roll_place) - (pan_pick + roll_pick) = Δyaw`")
+    R.append("旋转补偿公式（标准视角俯视 A4，顺时针为正）：")
+    R.append("`实际碎片旋转 = (roll_place − roll_pick) − (pan_place − pan_pick)`，")
+    R.append("与目标 −Δyaw 比较（roll 物理角增大=俯视顺时针、pan 物理角增大=俯视逆时针，实测）。")
     R.append("")
     R.append("| 片 | pan_pick | pan_place | Δpan | roll_pick | roll_place | 补偿后旋转 |")
     R.append("|---|---|---|---|---|---|---|")

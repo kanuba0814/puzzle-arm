@@ -106,7 +106,7 @@
           "type": "number",
           "minimum": -180,
           "exclusiveMaximum": 180,
-          "description": "0° 基准约定：source.yaw_deg 恒为 0（不测量碎片绝对朝向），target.yaw_deg 为求解器相对旋转角（拼图只需相对方向）。"
+          "description": "标准视角（俯视 A4、z 向上、磁吸面朝下）：正值 = 俯视逆时针。0° 基准约定：source.yaw_deg 恒为 0（不测量碎片绝对朝向），target.yaw_deg 为求解器相对旋转角。"
         }
       }
     }

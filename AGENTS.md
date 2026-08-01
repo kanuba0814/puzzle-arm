@@ -82,6 +82,7 @@
 - `MotionGoal.timestamp_ns`、`deadline_ns` 和控制器 deadline 比较必须处于同一 `time.monotonic_ns()` 时钟域；禁止 Supervisor 用 monotonic 生成 deadline、控制器却用 `time.time_ns()` 比较。PARK 途中宽跟随门槛也不得代替最终正式 PARK 容差验收。
 - 相机运行时必须使用冻结的 `/dev/epuzzle-camera` 稳定链接（Sipeed MaixCAM `359f:2120`、serial `c9c28f4513595968`、capture index 0），不得依赖可漂移的数字 index；更换相机必须重新冻结 udev identity。
 - 若 Pi 内核报告 `xHCI host controller not responding` / `HC died` 并使机械臂串口节点消失，异常清理无法再确认断力矩或正式 PARK。禁止自动重绑 USB、重启 Pi 或重试运动；必须先由现场操作者支撑机械臂并切断舵机电源，再恢复 USB，随后先做只读枚举和 PARK 状态检查。
+- 运行中断连数秒自动恢复与 HC 死亡是两类故障：`usb usb3-port2: disabled by hub (EMI?), re-enabling...` → `USB disconnect` → ~1 s 自动重枚举是**端口级信号完整性事件**（本机实测集中在机械臂运动+磁铁动作窗口，空闲期零事件，换口无效），自动恢复无需人工；`HC died` 是控制器级，不自动恢复。重试（3s×2）只对 URB 级瞬时错误有效，`cdc_acm` 全量断开后旧 fd 永久 EIO，装配 run 会整段被杀。**已实施**：插件 `reconnect_lite()`（重开串口+对齐 Goal=Present+校验 Torque_Enable 全 1，不断力矩/不重配电机）+ `ResilientJointRobot` 有界重连（每次调用最多 2 次）+ 控制器按 phase 门禁（PICK/PLACE 恒禁止，其余按 `allow_usb_reconnect`）+ 收敛 deadline 宽限 + `attempt_park` 清理路径可重连。详见 `docs/26_USB断连故障研究.md`；硬件整改（接地审计/去耦/续流二极管/线缆）与 Pi 实机拔插验证仍待办。
 - Pi 的工作区五轴插件源码路径必须排在 venv site-packages 前；包版本号相同不能证明安装内容一致。软件自检必须同时断言实际导入路径来自 `/opt/epuzzle/workspace/src/robot_plugin/`，且 `SO101Follower5D.connect_bumpless` 存在。
 - 真实硬件事件导致 PARK/断力矩无法确认时，使用 root 管理的 `/etc/epuzzle/robot-motion.lock.json` 持久锁定运动；设备节点重新出现、GUI 重启或 Pi 重启都不得自动解锁。只有现场完成锁文件 `clear_requires` 全部步骤并明确批准后，才可人工解除。
 - 笛卡尔插值步数不能只按 XYZ 距离和 pitch/yaw 分段：HOME→首航点这类笛卡尔位移小、关节大幅重构的动作（实测 pan −49.9°、elbow +35.6°、wrist −46.9°）会使单步关节跳变超 `max_joint_step_deg`。终点 IK 的关节位移只是下界，IK 非线性使中间段单步跳变大于均值，`ceil(span/limit)` 甚至加 2% 余量都仍可能失败（实测 10.14°/10.15°/10.137° 反复卡在 10° 门槛外）。正确做法是超限即翻倍加密重试（上限 4 轮），绝不放宽 `max_joint_step_deg`；本机 piece-0 最终以 6 点通过。
@@ -90,6 +91,7 @@
 - Supervisor 的 `refresh_detection` 原先硬编码红色检测，会在 pick-place 前用红色结果清空其他材料的 `pieces.json`。现由 `--material` 选择 `detect_generic_pieces.py`（white/green/blue）或 legacy `detect_red_pieces.py`。`WORKSPACE = Path("workspace")` 是相对路径，CLI 必须从 `/opt/epuzzle` 项目根执行；不要用自引用软链接 `workspace -> .` 绕过，它会造成目录递归。
 - 当前无吸附/释放传感器：`VERIFY_PICK`/`VERIFY_PLACE` 只做提升运动并记 `verify_pick_unsensed`/`verify_place_unsensed`，`success: true` 仅代表运动与磁铁时序完成，不代表碎片真被吸起或放下。抓放成败必须由现场目视确认后才可写入验收记录。
 - 旋转基准 0° 约定（2026-08-01 起）：不测量碎片绝对朝向。`PlacementPlan.source.yaw_deg` 恒为 `0`（相机拍下初始位置一律视为 0°），`target.yaw_deg` 即求解器相对旋转角（拼图只需碎片间相对方向）。删除“质心→最远顶点”几何朝向的理由：对轮廓噪声敏感、接近对称形状时跳变 180°，且电磁吸头点接触下绝对朝向无夹持约束。执行端 `run_assembly_4pieces.py` 的 roll 补偿（碎片旋转 = Δpan + Δroll = Δyaw，模 360）是该约定的唯一消费方；求解器绝对角输出已废弃。
+- 旋转方向标准视角（2026-08-01 统一）：所有水平面旋转角以“俯视 A4 工作台”为准（z 向上、磁吸面朝下），正值 = 俯视逆时针。本机实测硬件方向：`shoulder_pan` 物理角增大 = 俯视逆时针（与 FK 一致）；`wrist_roll` 物理角增大 = 俯视**顺时针**（与 FK 假设相反，位置标定测不出朝向）。因此实际碎片旋转（俯视顺时针为正）= `Δroll_phys − Δpan_phys`，IK 只保证 `Δpan + Δroll = 命令 Δyaw`；执行端命令增量必须取 `Δyaw_cmd = 2*Δpan − Δyaw`（已在 run_assembly_4pieces 实现）。验证/报告工具（verify_rotation2、motion_analysis、report_human）统一比较“实际碎片旋转 vs 目标 −Δyaw”，严禁退回 `Δpan+Δroll` 旧口径（它自洽但无法发现方向错误，v10 实测 4 片方向全错即此原因）。
 
 ## 提交前最低检查
 

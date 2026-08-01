@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""验证旋转补偿：碎片旋转量 = 末端 yaw 变化 = Δyaw（含 pan 补偿）。
+"""
+[废弃 2026-08-01] 旋转口径已被标准视角统一取代（俯视 A4、顺逆时针为准；实际碎片旋转 = Δroll_phys − Δpan_phys，目标 −Δyaw）。仅供历史参考，不得用于旋转验证结论。
+验证旋转补偿：碎片旋转量 = 末端 yaw 变化 = Δyaw（含 pan 补偿）。
 
 关键公式（用户要求的实现）：
   roll_place = roll_pick + Δyaw - (pan_place - pan_pick)

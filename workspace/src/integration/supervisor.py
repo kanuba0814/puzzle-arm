@@ -410,8 +410,11 @@ class Supervisor:
             # 两步转移，避免飞行途中旋转撞到机械臂架子：
             # 1) 保持源 yaw 平移到目标正上方（z_safe）；
             # 2) 在目标正上方原地旋转到目标 yaw，再下降接触。
-            # 大 Δyaw（如 -227°）若在直线飞行中线性旋转，中途可能
+            # 大 Δyaw_cmd（如 -227°）若在直线飞行中线性旋转，中途可能
             # 扫过架子/障碍物；拆开后旋转只发生在安全高度目标上方。
+            # 注意：pick_pose/place_pose 的 yaw 已由调用方（run_assembly）
+            # 按标准视角（俯视 A4）修正为 Δyaw_cmd = 2*Δpan − Δyaw，
+            # 此处只做插值执行，不再重算方向。
             place_safe_src_yaw = ToolPose(
                 place_safe.frame,
                 place_safe.position_mm,

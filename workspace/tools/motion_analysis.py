@@ -141,15 +141,21 @@ def main() -> None:
                 dist = np.hypot(dx, dy)
                 exec_rec["place"]["error_vs_target_mm"] = [round(dx, 1), round(dy, 1)]
                 exec_rec["place"]["error_dist_mm"] = round(float(dist), 1)
-                # 旋转
+                # 实际碎片旋转（标准视角俯视 A4，顺时针为正）
+                # = Δroll_phys − Δpan_phys（roll 物理角增大=俯视顺时针、
+                #   pan 物理角增大=俯视逆时针，实测）；目标 = −Δyaw
                 if pick_j:
                     pjv = JointVector.from_mapping(pick_j)
                     ppose = KIN.forward(pjv)
-                    actual_rot = pose.yaw_deg - ppose.yaw_deg
+                    pan_p = to_phys(pick_j["shoulder_pan.pos"], 0)
+                    roll_p = to_phys(pick_j["wrist_roll.pos"], 4)
+                    pan_l = to_phys(place_j["shoulder_pan.pos"], 0)
+                    roll_l = to_phys(place_j["wrist_roll.pos"], 4)
+                    actual_rot = (roll_l - roll_p) - (pan_l - pan_p)
                     exec_rec["actual_rotation_deg"] = round(float(actual_rot), 1)
                     print(f"  执行{i+1}: pick=({exec_rec['pick']['tcp_table_mm'][0]:.1f},{exec_rec['pick']['tcp_table_mm'][1]:.1f}) "
                           f"place=({x:.1f},{y:.1f}) 偏差={exec_rec['place']['error_dist_mm']}mm "
-                          f"实际旋转={exec_rec['actual_rotation_deg']}° (Δyaw={delta_yaw:.1f}°)")
+                          f"实际碎片旋转={exec_rec['actual_rotation_deg']}° (目标 −Δyaw={-delta_yaw:.1f}°)")
 
             piece_rec["executions"].append(exec_rec)
 

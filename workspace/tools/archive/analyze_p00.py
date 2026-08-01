@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""分析 place-piece_00 的所有执行记录。"""
+"""
+[废弃 2026-08-01] 旋转口径已被标准视角统一取代（俯视 A4、顺逆时针为准；实际碎片旋转 = Δroll_phys − Δpan_phys，目标 −Δyaw）。仅供历史参考，不得用于旋转验证结论。
+分析 place-piece_00 的所有执行记录。"""
 import json
 import sys
 from pathlib import Path
