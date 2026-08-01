@@ -329,11 +329,11 @@ class MotionController:
                 goal_velocity = self._config.goal_velocity_by_profile.get(
                     goal.speed_profile
                 )
-                # USB 瞬时掉线重试：1s 间隔最多 3 次；Goal_Position 写
+                # USB 瞬时掉线重试：3s 间隔最多重试 2 次；Goal_Position 写
                 # 幂等，重发同一目标安全。
                 sent: Mapping[str, object] | None = None
                 last_send_error: Exception | None = None
-                for _attempt in range(4):
+                for _attempt in range(3):
                     try:
                         sent = self._robot.send_action(
                             waypoint.as_mapping(), goal_velocity=goal_velocity
@@ -341,7 +341,7 @@ class MotionController:
                         break
                     except (ValueError, RuntimeError, OSError) as send_exc:
                         last_send_error = send_exc
-                        self._sleep(1.0)
+                        self._sleep(3.0)
                 if sent is None:
                     raise RuntimeError(f"舵机目标发送失败: {last_send_error}")
                 sent = JointVector.from_mapping(sent)
@@ -535,14 +535,14 @@ class MotionController:
         return waypoints
 
     def _read_joints(self) -> JointVector:
-        """读取五轴状态；USB 瞬时掉线时 1s 间隔重试 3 次。
+        """读取五轴状态；USB 瞬时掉线时 3s 间隔重试 2 次。
 
         现场经验：连续长时间运动后机械臂 USB 偶发掉线（termios I/O error），
-        多数情况下重试即恢复；重试 3 次仍失败才抛出，由调用方转成
+        多数情况下重试即恢复；重试 2 次仍失败才抛出，由调用方转成
         ROBOT_COMM_TIMEOUT 结果。
         """
         last_error: Exception | None = None
-        for attempt in range(4):  # 首次 + 3 次重试
+        for attempt in range(3):  # 首次 + 2 次重试
             try:
                 observation = self._robot.get_observation()
                 joint_fields = {
@@ -553,7 +553,7 @@ class MotionController:
                 return JointVector.from_mapping(joint_fields)
             except (ValueError, RuntimeError, OSError) as exc:
                 last_error = exc
-                self._sleep(1.0)
+                self._sleep(3.0)
         assert last_error is not None
         raise last_error
 

@@ -294,12 +294,27 @@ def solve_puzzle_123(
         delta_yaw_deg = float(
             np.degrees(np.arctan2(rotation[1, 0], rotation[0, 0]))
         )
-        final_yaw = (piece.yaw_deg + delta_yaw_deg + 180.0) % 360.0 - 180.0
+        # 关键修复：yaw 必须用有方向的顶点几何朝向（与求解器同一参考系），
+        # 不能用 PCA 主轴角（惯性主轴，180° 模糊且与碎片几何边无关）。
+        # 磁头吸住碎片后碎片对齐磁头 yaw，PICK yaw 必须等于碎片真实朝向，
+        # 否则旋转量错误 → 放置角度偏差大（实机已验证）。
+        # 朝向 = 质心→最远顶点方向（对噪声鲁棒、方向唯一）。
+        verts_arr = np.asarray(piece.polygon_table_mm, dtype=np.float64)
+        geom_centroid = verts_arr.mean(axis=0)
+        farthest = max(
+            verts_arr, key=lambda v: float(np.hypot(v[0] - geom_centroid[0], v[1] - geom_centroid[1]))
+        )
+        source_yaw = float(
+            np.degrees(np.arctan2(
+                farthest[1] - geom_centroid[1], farthest[0] - geom_centroid[0]
+            ))
+        )
+        final_yaw = (source_yaw + delta_yaw_deg + 180.0) % 360.0 - 180.0
 
         source_pose = Pose2(
             frame="table_mm",
             center_mm=piece.grip_point_table_mm or piece.center_table_mm,
-            yaw_deg=piece.yaw_deg,
+            yaw_deg=source_yaw,
         )
         target_pose = Pose2(
             frame="table_mm",

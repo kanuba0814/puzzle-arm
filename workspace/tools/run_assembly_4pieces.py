@@ -186,9 +186,98 @@ def main() -> None:
         motion_config=pick_place_motion_config(),
     )
 
-    def yaw_pose(ref: PieceRef, height: float, yaw: float) -> ToolPose:
+    # table_mm -> robot_base_mm 的坐标系旋转（contact_sheet_to_robot_base 标定）
+    TABLE_TO_ROBOT_YAW_DEG = 4.43177
+
+    def yaw_pose(ref: PieceRef, height: float, yaw_table_deg: float) -> ToolPose:
+        """构造带 yaw 的 ToolPose。
+
+        yaw_table_deg 是 table_mm 系的碎片朝向（求解器/视觉的几何角），
+        ToolPose.yaw_deg 必须是 robot_base_mm 系（kinematics 里 yaw = pan + roll），
+        因此加 TABLE_TO_ROBOT_YAW_DEG 做坐标系旋转。
+        """
         base = adapter.pose_for(ref, height)
-        return ToolPose(base.frame, base.position_mm, base.pitch_deg, yaw)
+        return ToolPose(
+            base.frame,
+            base.position_mm,
+            base.pitch_deg,
+            yaw_table_deg + TABLE_TO_ROBOT_YAW_DEG,
+        )
+
+    def place_yaw_with_roll_compensation(
+        src_ref: PieceRef,
+        tgt_ref: PieceRef,
+        src_yaw_table: float,
+        tgt_yaw_table: float,
+    ) -> tuple[float, float]:
+        """计算 PICK/PLACE 的 robot 系 yaw，保证碎片旋转 ≡ Δyaw (mod 360)。
+
+        物理约束：wrist_roll 单圈（STS3215 0..4095 ticks），逻辑限位 [-180,180]
+        → 物理限位 [logical*direction+offset] = [-262.15, +97.85]（direction=-1,
+        offset=-82.15）。碎片旋转 = 末端 yaw 变化 = Δpan + Δroll_physical，
+        必须等于求解器 Δyaw（模 360）。Δyaw 等价角 {Δyaw, Δyaw±360} 中选
+        使物理 roll 落入限位的那个。
+        """
+        geom = adapter.kinematics.geometry
+        roll_dir = geom.joint_directions[4]
+        roll_off = geom.joint_zero_offsets_deg[4]
+        roll_limits_logical = geom.joint_limits_deg[4]
+        # 物理限位 = 逻辑*direction + offset
+        roll_lo = min(roll_limits_logical[0] * roll_dir + roll_off,
+                      roll_limits_logical[1] * roll_dir + roll_off)
+        roll_hi = max(roll_limits_logical[0] * roll_dir + roll_off,
+                      roll_limits_logical[1] * roll_dir + roll_off)
+
+        # PICK yaw：碎片几何朝向（robot 系）
+        pick_yaw = src_yaw_table + TABLE_TO_ROBOT_YAW_DEG
+        pick_pose = yaw_pose(src_ref, 60.0, src_yaw_table)
+        pick_jv = adapter.kinematics.inverse(pick_pose)
+        pm = pick_jv.as_mapping()
+        pan_pick_log = pm["shoulder_pan.pos"]
+        roll_pick_log = pm["wrist_roll.pos"]
+        # 物理角
+        pan_pick_phys = pan_pick_log * geom.joint_directions[0] + geom.joint_zero_offsets_deg[0]
+        roll_pick_phys = roll_pick_log * roll_dir + roll_off
+
+        # PLACE pan（位置决定，与 yaw 无关）
+        place_base = adapter.pose_for(tgt_ref, 60.0)
+        pan_place_phys = float(
+            np.degrees(
+                np.arctan2(place_base.position_mm[1], place_base.position_mm[0])
+            )
+        )
+        delta_yaw = (tgt_yaw_table - src_yaw_table + 180.0) % 360.0 - 180.0
+        candidates = [delta_yaw, delta_yaw + 360.0, delta_yaw - 360.0]
+        chosen: float | None = None
+        chosen_roll: float = 0.0
+        for cand in candidates:
+            roll_place_phys = roll_pick_phys + cand - (pan_place_phys - pan_pick_phys)
+            if roll_lo - 1e-6 <= roll_place_phys <= roll_hi + 1e-6:
+                chosen = cand
+                chosen_roll = roll_place_phys
+                print(
+                    f"    补偿: Δyaw={delta_yaw:.1f}° 取等价角 {cand:+.1f}° | "
+                    f"pan_phys {pan_pick_phys:+.1f}→{pan_place_phys:+.1f} | "
+                    f"roll_phys {roll_pick_phys:+.1f}→{roll_place_phys:+.1f} ✓"
+                )
+                break
+        if chosen is None:
+            # 兜底：取最接近限位的等价角
+            best_cand = None
+            best_dist = 1e9
+            for cand in candidates:
+                rp = roll_pick_phys + cand - (pan_place_phys - pan_pick_phys)
+                dist = max(0.0, roll_lo - rp, rp - roll_hi)
+                if dist < best_dist:
+                    best_dist = dist
+                    best_cand = cand
+                    chosen_roll = rp
+            chosen = best_cand
+            print(
+                f"    ⚠ 补偿: 无限位内等价角，取 {chosen:+.1f}° | "
+                f"roll_phys {roll_pick_phys:+.1f}→{chosen_roll:+.1f} (越限 {best_dist:.1f}°)"
+            )
+        return pick_yaw, pick_yaw + chosen
 
     # 全路径 IK 预检：逐点可达性（不检查相邻点步长——
     # MotionController.move 有翻倍加密重试，AGENTS.md 记录过 preflight
@@ -273,8 +362,33 @@ def main() -> None:
                 continue
             src_ref = PieceRef(p["piece_id"], p["src_mm"])
             tgt_ref = PieceRef(f"{p['piece_id']}-place", p["tgt_mm"])
+            # 旋转补偿：选 Δyaw 等价角使 roll 在限位内，保证碎片旋转 ≡ Δyaw
+            pick_yaw_robot, place_yaw_robot = place_yaw_with_roll_compensation(
+                src_ref, tgt_ref, p["src_yaw"], p["tgt_yaw"]
+            )
             pick_pose = yaw_pose(src_ref, heights.pick_mm, p["src_yaw"])
+            # 用补偿后的 robot 系 yaw 覆盖 pick/place 姿态
+            pick_pose = ToolPose(
+                pick_pose.frame, pick_pose.position_mm, pick_pose.pitch_deg, pick_yaw_robot
+            )
             place_pose = yaw_pose(tgt_ref, heights.place_mm, p["tgt_yaw"])
+            place_pose = ToolPose(
+                place_pose.frame, place_pose.position_mm, place_pose.pitch_deg, place_yaw_robot
+            )
+            # 验证实际碎片旋转 = Δyaw（模 360）
+            pick_jv = adapter.kinematics.inverse(pick_pose)
+            place_jv = adapter.kinematics.inverse(place_pose)
+            pm = pick_jv.as_mapping()
+            lm = place_jv.as_mapping()
+            actual_rot = (lm["shoulder_pan.pos"] + lm["wrist_roll.pos"]) - (
+                pm["shoulder_pan.pos"] + pm["wrist_roll.pos"]
+            )
+            delta_yaw = (p["tgt_yaw"] - p["src_yaw"] + 180.0) % 360.0 - 180.0
+            ok = abs((actual_rot - delta_yaw + 180.0) % 360.0 - 180.0) < 0.5
+            print(
+                f"  旋转验证: 实际 {actual_rot:+.1f}° vs Δyaw {delta_yaw:+.1f}° "
+                f"({'✓' if ok else '✗ 偏差!'})"
+            )
             plan_ref = PlacementPlanRef(batch.source_image_sha256, batch.monotonic_ns)
             active.grasp_fsm(plan_ref, piece=src_ref, pick_pose=pick_pose, place_pose=place_pose)
             done.add(p["piece_id"])
