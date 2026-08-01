@@ -109,6 +109,10 @@ motion:
   precision_terminal_acceleration_raw: 30
   empty_speed_scale: "UNKNOWN"
   holding_speed_scale: "UNKNOWN"
+  puzzle_geometry_scale_factor: 1.0
+  puzzle_geometry_scale_source: "frozen original measured module geometry; no pre-solve enlargement"
+  puzzle_placement_gap_mm: 5.0
+  puzzle_placement_gap_source: "post-solve pairwise polygon clearance; fail-closed before action plan"
 
 magnet:
   gpio_chip: "/dev/gpiochip0"

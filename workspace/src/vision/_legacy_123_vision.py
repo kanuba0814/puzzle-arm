@@ -383,9 +383,10 @@ class PuzzleVision:
             ).astype(np.uint8) * 255
         pm = cv2.bitwise_and(pm, roi)
         pm = cv2.morphologyEx(pm, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
-        # 闭运算填孔: 暗光噪声洞多用大核; 亮光碎片间距可能只有
-        # 几mm, 大核会把相邻碎片桥接成一块, 用小核
-        close_k = 9 if paper_v < 140 else 5
+        # 闭运算填孔：暗光白纸噪声洞多用大核；黑底上的亮色碎片间距
+        # 可能只有数个像素，9×9 会把独立碎片桥接（实拍 4 片合成 1 块），
+        # 因此黑底固定 3×3，保持离散连通域。
+        close_k = 3 if black_background else (9 if paper_v < 140 else 5)
         pm = cv2.morphologyEx(
             pm, cv2.MORPH_CLOSE, np.ones((close_k, close_k), np.uint8)
         )
@@ -407,8 +408,11 @@ class PuzzleVision:
             mean_v = cv2.mean(V, mask=blob)[0]
             if black_background:
                 # 黑底上接受显著更亮（含白/灰）或显著更有色度（含深色）的区域。
-                differs = mean_v > float(paper_v) + 20.0 or (
-                    mean_s > float(paper_s) + 28.0 and mean_v > float(paper_v) + 10.0
+                # 阈值必须排除低对比度反光：实测反光 meanV 仅比纸面高 +33
+                # （纸面 V=46，反光 V=79），真碎片高 +96（V=142）。
+                # 之前 +20 太宽松，反光区域被误检为碎片（6边 620mm² 伪轮廓）。
+                differs = mean_v > float(paper_v) + 60.0 or (
+                    mean_s > float(paper_s) + 28.0 and mean_v > float(paper_v) + 40.0
                 )
             else:
                 differs = mean_v < paper_v - 18 or mean_s > paper_s + 35

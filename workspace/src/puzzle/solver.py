@@ -14,6 +14,12 @@ from typing import Protocol
 
 import numpy as np
 
+from .discrete_layout import (
+    DiscreteLayout,
+    DiscreteLayoutError,
+    plan_discrete_layout,
+)
+
 
 class _PieceLike(Protocol):
     piece_id: str
@@ -71,10 +77,20 @@ class PuzzleOptions:
     abs_tolerance_mm: float = 2.0
     rel_tolerance: float = 0.03
     vertex_tolerance_mm: float = 2.0
+    # 原版几何完成拼图匹配后，只平移目标位形成片间最小净距。
+    # 默认 5 mm 是执行计划约束，不参与接缝匹配和几何评分。
+    placement_gap_mm: float = 5.0
     # 相邻碎片接缝处的可容忍重叠深度：视觉多边形顶点有 ≈±1 mm 测量偏差，
     # 零容忍重叠剪枝会把正确装配整体判死（合成复现）；官方验收容差为
     # 顶点距离 ≤ 20 mm，0.75 mm 远在安全范围内。
     overlap_depth_tolerance_mm: float = 0.75
+
+    def __post_init__(self) -> None:
+        if (
+            not math.isfinite(self.placement_gap_mm)
+            or self.placement_gap_mm < 5.0
+        ):
+            raise ValueError("placement_gap_mm 必须是至少 5 mm 的有限数")
 
 
 @dataclass(frozen=True)
@@ -379,15 +395,31 @@ def _single_piece_solution(
         <= options.target_height_range_mm[1] + options.abs_tolerance_mm
     ):
         return None
-    center = (
-        (target.min_x_mm + target.max_x_mm) / 2,
-        (target.min_y_mm + target.max_y_mm) / 2,
+    try:
+        layout = plan_discrete_layout(
+            (polygon,),
+            clearance_mm=options.placement_gap_mm,
+            target_bounds_mm=(
+                target.min_x_mm,
+                target.min_y_mm,
+                target.max_x_mm,
+                target.max_y_mm,
+            ),
+        )
+    except DiscreteLayoutError:
+        return _empty_result("SOLVER_DISCRETE_LAYOUT_FAILED", 0.0, 0, 0)
+    target_reference = np.asarray(piece.center_table_mm) + np.asarray(
+        layout.translations_mm[0]
     )
     plan = PlacementPlan(
         str(piece.piece_id),
         0,
         Pose2("table_mm", piece.center_table_mm, SOURCE_YAW_BASELINE_DEG),
-        Pose2("table_mm", center, SOURCE_YAW_BASELINE_DEG),  # 单片不旋转
+        Pose2(
+            "table_mm",
+            (float(target_reference[0]), float(target_reference[1])),
+            SOURCE_YAW_BASELINE_DEG,
+        ),  # 单片不旋转
         0.0,
         None,
         "not_run",
@@ -409,14 +441,20 @@ def _single_piece_solution(
             "overlap": 0.0,
             "rectangle_gap": 0.0,
             "outside_target": 0.0,
+            "placement_gap_mm": options.placement_gap_mm,
         },
         False,
-        "puzzle-geometry-v2",
+        "puzzle-geometry-v2+discrete-v1",
         "geometry-only",
         {},
         {"solve": 0.0},
         0,
         0,
+        {
+            "extra": layout.as_diagnostics(
+                (str(piece.piece_id),), options.placement_gap_mm
+            )
+        },
     )
 
 
@@ -676,26 +714,31 @@ def _plans_for_assembly(
     transforms: dict[str, tuple[np.ndarray, np.ndarray]],
     target: TargetRegion,
     score: float,
-) -> tuple[PlacementPlan, ...]:
-    transformed = [
-        _transform(_polygon(piece), *transforms[piece.piece_id]) for piece in pieces
-    ]
-    all_points = np.concatenate(transformed)
-    shift = (
-        np.array(
-            [
-                (target.min_x_mm + target.max_x_mm) / 2,
-                (target.min_y_mm + target.max_y_mm) / 2,
-            ]
-        )
-        - (all_points.min(axis=0) + all_points.max(axis=0)) / 2
+    placement_gap_mm: float,
+) -> tuple[tuple[PlacementPlan, ...], DiscreteLayout]:
+    ordered_pieces = tuple(sorted(pieces, key=lambda item: item.piece_id))
+    transformed = tuple(
+        _transform(_polygon(piece), *transforms[piece.piece_id])
+        for piece in ordered_pieces
+    )
+    layout = plan_discrete_layout(
+        transformed,
+        clearance_mm=placement_gap_mm,
+        target_bounds_mm=(
+            target.min_x_mm,
+            target.min_y_mm,
+            target.max_x_mm,
+            target.max_y_mm,
+        ),
     )
     plans: list[PlacementPlan] = []
-    # Piece ID is the tie-breaker; geometry score makes this deterministic and easy to audit.
-    for order, piece in enumerate(sorted(pieces, key=lambda item: item.piece_id)):
+    # Piece ID is tie-breaker；离散模块只增加平移，不改变求解器给出的旋转。
+    for order, piece in enumerate(ordered_pieces):
         rotation, translation = transforms[piece.piece_id]
         target_center = (
-            rotation @ np.asarray(piece.center_table_mm) + translation + shift
+            rotation @ np.asarray(piece.center_table_mm)
+            + translation
+            + np.asarray(layout.translations_mm[order])
         )
         plans.append(
             PlacementPlan(
@@ -715,7 +758,7 @@ def _plans_for_assembly(
                 tuple(piece.equivalent_yaws_deg),
             )
         )
-    return tuple(plans)
+    return tuple(plans), layout
 
 
 def solve_puzzle(
@@ -988,21 +1031,45 @@ def solve_puzzle(
             expansions,
             pruned,
         )
+    try:
+        placements, layout = _plans_for_assembly(
+            pieces, transforms, target_region, best_score, options.placement_gap_mm
+        )
+    except DiscreteLayoutError:
+        return _empty_result(
+            "SOLVER_DISCRETE_LAYOUT_FAILED",
+            elapsed,
+            expansions,
+            pruned,
+            texture_evidence is not None,
+        )
+    layout_breakdown = dict(breakdown)
+    layout_breakdown["placement_gap_mm"] = options.placement_gap_mm
+    if layout.minimum_clearance_mm is not None:
+        layout_breakdown["minimum_pair_clearance_mm"] = (
+            layout.minimum_clearance_mm
+        )
     return PuzzleSolveResult(
         PuzzleSolveStatus.SOLVED,
         None,
         dimensions,
-        _plans_for_assembly(pieces, transforms, target_region, best_score),
+        placements,
         len(solutions),
         best_score,
         second_score,
         gap,
-        breakdown,
+        layout_breakdown,
         texture_evidence is not None,
-        "puzzle-geometry-v2",
+        "puzzle-geometry-v2+discrete-v1",
         "geometry-only",
         {},
         {"solve": elapsed},
         expansions,
         pruned,
+        {
+            "extra": layout.as_diagnostics(
+                tuple(piece.piece_id for piece in pieces),
+                options.placement_gap_mm,
+            )
+        },
     )

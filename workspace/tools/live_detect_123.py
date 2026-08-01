@@ -49,12 +49,18 @@ class LivePiece:
     yaw_deg: float
     timestamp_ns: int
     equivalent_yaws_deg: tuple[float, ...]
-    grip_point_table_mm: tuple[float, float] | None = None
+    pick_point_table_mm: tuple[float, float] | None = None
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--camera", default="/dev/epuzzle-camera")
+    parser.add_argument(
+        "--frame",
+        type=Path,
+        default=None,
+        help="回放已保存图像；提供后不访问相机",
+    )
     parser.add_argument("--width", type=int, default=1280)
     parser.add_argument("--height", type=int, default=720)
     parser.add_argument("--warmup", type=int, default=8)
@@ -64,10 +70,18 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="显式指定标定文件；缺省走适配器自动匹配",
     )
+    parser.add_argument(
+        "--placement-gap-mm",
+        type=float,
+        default=5.0,
+        help="原版求解完成后的最小片间净距，默认 5mm",
+    )
     return parser
 
 
 def grab_frame(args: argparse.Namespace) -> np.ndarray | None:
+    if args.frame is not None:
+        return cv2.imread(str(args.frame))
     capture = cv2.VideoCapture(args.camera)
     if not capture.isOpened():
         return None
@@ -102,7 +116,7 @@ def to_live_pieces(pieces: list[dict]) -> tuple[LivePiece, ...]:
                 yaw_deg=float(piece.get("angle_deg", 0.0)),
                 timestamp_ns=now_ns,
                 equivalent_yaws_deg=(float(piece.get("angle_deg", 0.0)),),
-                grip_point_table_mm=(
+                pick_point_table_mm=(
                     (float(grip[0]), float(grip[1])) if grip is not None else None
                 ),
             )
@@ -112,6 +126,9 @@ def to_live_pieces(pieces: list[dict]) -> tuple[LivePiece, ...]:
 
 def main() -> int:
     args = build_parser().parse_args()
+    if not np.isfinite(args.placement_gap_mm) or args.placement_gap_mm < 5.0:
+        print("FAIL placement-gap-mm 必须是至少 5mm 的有限数")
+        return 2
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -125,9 +142,11 @@ def main() -> int:
 
     frame = grab_frame(args)
     if frame is None:
-        print("FAIL 相机抓帧失败")
+        source = f"回放帧 {args.frame}" if args.frame is not None else "相机"
+        print(f"FAIL {source}抓帧失败")
         return 2
-    print(f"抓帧: {frame.shape[1]}x{frame.shape[0]}")
+    source = f"回放 {args.frame}" if args.frame is not None else "相机"
+    print(f"抓帧: {frame.shape[1]}x{frame.shape[0]} ({source})")
     cv2.imwrite(str(out_dir / "frame.jpg"), frame)
 
     vision = PuzzleVision(backend=None)
@@ -173,8 +192,20 @@ def main() -> int:
     target = TargetRegion(
         frame="table_mm", min_x_mm=0.0, min_y_mm=0.0, max_x_mm=210.0, max_y_mm=148.5
     )
-    result = solve_puzzle_123(state, target, PuzzleOptions())
-    print(f"求解: {result.status.value} error={result.error_code}")
+    result = solve_puzzle_123(
+        state,
+        target,
+        PuzzleOptions(placement_gap_mm=args.placement_gap_mm),
+    )
+    print(
+        f"求解: {result.status.value} error={result.error_code} "
+        f"placement_gap_mm={args.placement_gap_mm:.3f}"
+    )
+    minimum_clearance = result.diagnostics.get("extra", {}).get(
+        "minimum_pair_clearance_mm"
+    )
+    if minimum_clearance is not None:
+        print(f"  验收最小片间净距: {float(minimum_clearance):.3f} mm")
     if result.inferred_target is not None:
         width, height = result.inferred_target
         print(f"  反推矩形: {width:.1f} x {height:.1f} mm")
@@ -204,6 +235,7 @@ def main() -> int:
             }
             for piece in pieces
         ],
+        "placement_gap_mm": args.placement_gap_mm,
         "solve": {
             "status": result.status.value,
             "error_code": result.error_code,
@@ -212,6 +244,7 @@ def main() -> int:
             ),
             "placements": [plan.as_mapping() for plan in result.placements],
             "timing_ms": result.timing_ms,
+            "diagnostics": result.diagnostics,
         },
         "note": "vision+solve only; no servo goal, no magnet",
     }

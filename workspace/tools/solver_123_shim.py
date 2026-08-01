@@ -64,6 +64,7 @@ class Legacy123Solver:
             abs_tolerance_mm=2.0,
             rel_tolerance=0.03,
             vertex_tolerance_mm=2.0,
+            placement_gap_mm=5.0,
         )
 
         result = solve_puzzle_123(WorkspaceState(pieces), target, options)
@@ -112,6 +113,18 @@ class _JsonPuzzlePiece:
             float(center_value[0]),
             float(center_value[1]),
         )
+        pick_value = item.get("pick_point_table_mm")
+        if pick_value is None:
+            pick_value = item.get("grip_point_table_mm")
+        if pick_value is None:
+            self.pick_point_table_mm: tuple[float, float] | None = None
+        elif not isinstance(pick_value, (list, tuple)) or len(pick_value) != 2:
+            raise ValueError(f"pieces[{index}].pick_point_table_mm 必须是 [x, y]")
+        else:
+            self.pick_point_table_mm = (
+                float(pick_value[0]),
+                float(pick_value[1]),
+            )
         self.yaw_deg: float = float(item.get("yaw_deg", 0.0))
         self.timestamp_ns: int = item.get("timestamp_ns", 0)
         self.equivalent_yaws_deg: tuple[float, ...] = (self.yaw_deg,)

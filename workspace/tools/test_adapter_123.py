@@ -25,6 +25,7 @@ from puzzle._legacy_123_assembly import (  # noqa: E402
     _gen_guillotine_pieces,
     _scatter,
 )
+from puzzle.discrete_layout import polygon_distance_mm  # noqa: E402
 from puzzle.solver import (  # noqa: E402
     PuzzleOptions,
     PuzzleSolveStatus,
@@ -43,14 +44,17 @@ class FakePiece:
     yaw_deg: float
     timestamp_ns: int
     equivalent_yaws_deg: tuple[float, ...]
-    grip_point_table_mm: tuple[float, float] | None = None
+    pick_point_table_mm: tuple[float, float] | None = None
 
 
 def make_pieces(scattered: list[np.ndarray]) -> tuple[FakePiece, ...]:
     pieces = []
     for index, verts in enumerate(scattered):
         polygon = tuple((float(v[0]), float(v[1])) for v in verts)
-        center = verts.mean(axis=0)
+        vertex_mean = verts.mean(axis=0)
+        # 数据契约不保证 center 等于顶点算术均值；故意制造差异，防止适配器
+        # 用 placed_vertex_mean + R@(pick-center) 近似正式 R@pick+t。
+        center = vertex_mean + np.asarray((3.0, -2.0))
         pieces.append(
             FakePiece(
                 piece_id=f"piece_{index:02d}",
@@ -59,16 +63,27 @@ def make_pieces(scattered: list[np.ndarray]) -> tuple[FakePiece, ...]:
                 yaw_deg=0.0,
                 timestamp_ns=index,
                 equivalent_yaws_deg=(0.0,),
+                # 非质心吸点回归：验证 source 保留实测 pick_point，target
+                # 对同一局部点应用求解旋转与离散平移。
+                pick_point_table_mm=(
+                    float(vertex_mean[0] + 1.25),
+                    float(vertex_mean[1] - 0.75),
+                ),
             )
         )
     return tuple(pieces)
 
 
 def main() -> int:
+    # 与正式 A4 下半区一致；旧 297x105 横条会拒绝竖向 100mm 拼图加间距。
     target = TargetRegion(
-        frame="table_mm", min_x_mm=0.0, min_y_mm=0.0, max_x_mm=297.0, max_y_mm=105.0
+        frame="table_mm",
+        min_x_mm=0.0,
+        min_y_mm=0.0,
+        max_x_mm=210.0,
+        max_y_mm=148.5,
     )
-    options = PuzzleOptions()
+    options = PuzzleOptions(placement_gap_mm=5.0)
 
     passed = 0
     total = 6
@@ -82,7 +97,10 @@ def main() -> int:
         result = solve_puzzle_123(state, target, options)
 
         if result.status is PuzzleSolveStatus.NO_SOLUTION:
-            print(f"seed={seed}: NO_SOLUTION ({result.error_code})")
+            print(
+                f"seed={seed}: NO_SOLUTION ({result.error_code}) "
+                f"diagnostics={result.diagnostics}"
+            )
             continue
 
         assert result.inferred_target is not None
@@ -104,15 +122,50 @@ def main() -> int:
             plan.source.yaw_deg == 0.0 and -180.0 <= plan.target.yaw_deg < 180.0
             for plan in result.placements
         )
+        source_by_id = {piece.piece_id: piece for piece in state.pieces}
+        grip_semantics = all(
+            plan.source.center_mm == source_by_id[plan.piece_id].pick_point_table_mm
+            for plan in result.placements
+        )
+        target_polygons = []
+        for plan in result.placements:
+            source_piece = source_by_id[plan.piece_id]
+            angle_rad = np.radians(plan.target.yaw_deg)
+            rotation = np.asarray(
+                (
+                    (np.cos(angle_rad), -np.sin(angle_rad)),
+                    (np.sin(angle_rad), np.cos(angle_rad)),
+                )
+            )
+            target_polygons.append(
+                (np.asarray(source_piece.polygon_table_mm) - plan.source.center_mm)
+                @ rotation.T
+                + plan.target.center_mm
+            )
+        clearances = [
+            polygon_distance_mm(target_polygons[first], target_polygons[second])
+            for first in range(len(target_polygons))
+            for second in range(first + 1, len(target_polygons))
+        ]
+        clearance_ok = bool(clearances) and min(clearances) >= 5.0 - 1e-5
 
         print(
             f"seed={seed}: {result.status.value} "
             f"{width:.1f}x{height:.1f} 真值{true_size[0]:.0f}x{true_size[1]:.0f} "
             f"尺寸{'OK' if match else '不符'} 落位{'在区内' if inside else '越界'} "
             f"0基准{'OK' if zero_baseline else '不符'} "
+            f"吸点{'OK' if grip_semantics else '不符'} "
+            f"最小净距={min(clearances):.3f}mm "
             f"片数={len(result.placements)} 用时={result.timing_ms['total_ms']:.0f}ms"
         )
-        if match and inside and zero_baseline and len(result.placements) == 4:
+        if (
+            match
+            and inside
+            and zero_baseline
+            and grip_semantics
+            and clearance_ok
+            and len(result.placements) == 4
+        ):
             passed += 1
 
     print(f"--- {passed}/{total} 通过")

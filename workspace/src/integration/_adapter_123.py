@@ -26,6 +26,7 @@ from vision.generic_piece_observer import (
     VisionResult,
 )
 from puzzle._legacy_123_assembly import AssemblySolver
+from puzzle.discrete_layout import DiscreteLayoutError, plan_discrete_layout
 from puzzle.solver import (
     PlacementPlan,
     Pose2,
@@ -35,6 +36,19 @@ from puzzle.solver import (
     TargetRegion,
     WorkspaceState,
 )
+
+
+def _pick_point_table_mm(piece: object) -> tuple[float, float] | None:
+    """读取正式 pick_point 字段，并兼容尚未迁移的 legacy grip_point。"""
+    value = getattr(piece, "pick_point_table_mm", None)
+    if value is None:
+        value = getattr(piece, "grip_point_table_mm", None)
+    if value is None:
+        return None
+    point = np.asarray(value, dtype=np.float64)
+    if point.shape != (2,) or not np.isfinite(point).all():
+        raise ValueError("pick_point_table_mm 必须是两个有限毫米坐标")
+    return float(point[0]), float(point[1])
 
 
 def _find_homography_file() -> Path | None:
@@ -221,8 +235,34 @@ def solve_puzzle_123(
             pruned=0,
         )
 
-    # 提取顶点列表
-    pieces_verts = [np.array(p.polygon_table_mm, dtype=np.float64) for p in pieces]
+    try:
+        pick_points = tuple(_pick_point_table_mm(piece) for piece in pieces)
+    except (TypeError, ValueError) as error:
+        return PuzzleSolveResult(
+            status=PuzzleSolveStatus.NO_SOLUTION,
+            error_code="INVALID_PICK_POINT",
+            inferred_target=None,
+            placements=(),
+            candidates_after_dedup=0,
+            best_score=None,
+            second_best_score=None,
+            score_gap=None,
+            score_breakdown={},
+            texture_executed=False,
+            solver_version="legacy_123_assembly+discrete-v1",
+            profile_version="",
+            calibration_refs={},
+            timing_ms={"total_ms": (time.monotonic_ns() - started) / 1_000_000.0},
+            expansions=0,
+            pruned=0,
+            diagnostics={"extra": {"pick_point_error": str(error)}},
+        )
+
+    # 拼图匹配始终使用视觉实测的原版几何；5 mm 间距只在严格解产生后
+    # 通过每片平移加入，不改变 source/grip 坐标和求解器旋转。
+    pieces_verts = [
+        np.asarray(piece.polygon_table_mm, dtype=np.float64) for piece in pieces
+    ]
 
     # 调用 123 求解器
     # fit_margin 补偿检测轮廓侵蚀；AssemblySolver 通过 getattr 读取，
@@ -253,25 +293,44 @@ def solve_puzzle_123(
             pruned=0,
         )
 
-    # 提取拼接结果
-    # 123 求解在“碎片 0 为锚点”的原始散落坐标系内完成：
-    # placed_verts 已是拼好的多边形，rect_corners 是对应外接矩形。
-    # 落位只需一个全局平移：矩形中心 → 目标区中心。
-    placed_verts = solution["placed_verts"]
-    rect_size = solution["rect_size"]
-    rect_corners = solution.get("rect_corners")
-
-    target_center = np.array(
-        [
-            (target_region.min_x_mm + target_region.max_x_mm) / 2.0,
-            (target_region.min_y_mm + target_region.max_y_mm) / 2.0,
-        ]
+    # 123 求解在“碎片 0 为锚点”的原始散落坐标系内完成；离散布局模块
+    # 只对 placed_verts 求每片平移，并在输出计划前验收所有片对净距。
+    placed_verts = tuple(
+        np.asarray(polygon, dtype=np.float64)
+        for polygon in solution["placed_verts"]
     )
-    if rect_corners is not None:
-        assembly_center = np.asarray(rect_corners, dtype=np.float64).mean(axis=0)
-    else:
-        assembly_center = np.vstack(placed_verts).mean(axis=0)
-    offset = target_center - assembly_center
+    rect_size = solution["rect_size"]
+    try:
+        discrete_layout = plan_discrete_layout(
+            placed_verts,
+            clearance_mm=options.placement_gap_mm,
+            target_bounds_mm=(
+                target_region.min_x_mm,
+                target_region.min_y_mm,
+                target_region.max_x_mm,
+                target_region.max_y_mm,
+            ),
+        )
+    except DiscreteLayoutError as error:
+        return PuzzleSolveResult(
+            status=PuzzleSolveStatus.NO_SOLUTION,
+            error_code="DISCRETE_LAYOUT_FAILED",
+            inferred_target=(float(rect_size[0]), float(rect_size[1])),
+            placements=(),
+            candidates_after_dedup=1,
+            best_score=solution.get("score"),
+            second_best_score=None,
+            score_gap=None,
+            score_breakdown={"assembly": float(solution.get("score", 0.0))},
+            texture_executed=False,
+            solver_version="legacy_123_assembly+discrete-v1",
+            profile_version="",
+            calibration_refs={},
+            timing_ms={"total_ms": elapsed_ms},
+            expansions=0,
+            pruned=0,
+            diagnostics={"extra": {"layout_error": str(error)}},
+        )
 
     # 构造 PlacementPlan（per-piece）
     # 参考点语义：机械臂磁头吸住的是视觉给出的握点 grip_point（最大内切圆
@@ -280,16 +339,22 @@ def solve_puzzle_123(
     # 偏心被放大成 10mm+ 落位偏差（piece_01 实测偏 12mm，偏心 29.7mm）。
     placements = []
     for index, piece in enumerate(pieces):
-        rotation, _ = solution["transforms"][index]
-        placed_centroid = np.asarray(placed_verts[index]).mean(axis=0)
-        grip = getattr(piece, "grip_point_table_mm", None)
-        if grip is not None:
-            # 握点在碎片局部坐标 = 检测值 - 质心（检测时碎片未旋转）
-            local_grip = np.asarray(grip) - np.asarray(piece.center_table_mm)
-            # 拼接后握点 = 拼接质心 + R @ 局部握点
-            target_grip = placed_centroid + rotation @ local_grip + offset
-        else:
-            target_grip = placed_centroid + offset
+        rotation, translation = solution["transforms"][index]
+        grip = pick_points[index]
+        source_reference = np.asarray(
+            grip if grip is not None else piece.center_table_mm,
+            dtype=np.float64,
+        )
+        layout_translation = np.asarray(
+            discrete_layout.translations_mm[index], dtype=np.float64
+        )
+        # AssemblySolver 的变换直接作用于原始 table_mm 顶点；参考点必须使用
+        # 同一个 R @ p + t，再加离散平移。禁止假设 center 等于顶点算术均值。
+        target_grip = (
+            rotation @ source_reference
+            + np.asarray(translation, dtype=np.float64)
+            + layout_translation
+        )
         target_center_mm = target_grip
         delta_yaw_deg = float(
             np.degrees(np.arctan2(rotation[1, 0], rotation[0, 0]))
@@ -307,7 +372,7 @@ def solve_puzzle_123(
 
         source_pose = Pose2(
             frame="table_mm",
-            center_mm=piece.grip_point_table_mm or piece.center_table_mm,
+            center_mm=grip or piece.center_table_mm,
             yaw_deg=source_yaw,
         )
         target_pose = Pose2(
@@ -327,7 +392,7 @@ def solve_puzzle_123(
             plan_confidence=0.6 if solution.get("approximate") else 0.9,
             source_timestamp_ns=piece.timestamp_ns,
             equivalent_yaws_deg=piece.equivalent_yaws_deg,
-            solver_version="legacy_123_assembly",
+            solver_version="legacy_123_assembly+discrete-v1",
         )
         placements.append(plan)
 
@@ -347,12 +412,24 @@ def solve_puzzle_123(
         best_score=score,
         second_best_score=None,
         score_gap=None,
-        score_breakdown={"assembly": score},
+        score_breakdown={
+            "assembly": score,
+            "placement_gap_mm": options.placement_gap_mm,
+            "minimum_pair_clearance_mm": float(
+                discrete_layout.minimum_clearance_mm or 0.0
+            ),
+        },
         texture_executed=False,
-        solver_version="legacy_123_assembly",
+        solver_version="legacy_123_assembly+discrete-v1",
         profile_version="",
         calibration_refs={},
         timing_ms={"total_ms": elapsed_ms},
         expansions=0,
         pruned=0,
+        diagnostics={
+            "extra": discrete_layout.as_diagnostics(
+                tuple(piece.piece_id for piece in pieces),
+                options.placement_gap_mm,
+            )
+        },
     )
