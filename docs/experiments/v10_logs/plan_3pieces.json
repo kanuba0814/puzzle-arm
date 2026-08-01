@@ -1,0 +1,96 @@
+{
+  "solve": {
+    "placements": [
+      {
+        "piece_id": "piece_01",
+        "order": 1,
+        "source": {
+          "frame": "table_mm",
+          "center_mm": [
+            54.744675159454346,
+            227.07552337646484
+          ],
+          "yaw_deg": 136.82475828665605
+        },
+        "target": {
+          "frame": "table_mm",
+          "center_mm": [
+            111.97112769602879,
+            92.26889114537244
+          ],
+          "yaw_deg": -35.75251092914317
+        },
+        "geometry_score": 6.095054868156681,
+        "texture_score": null,
+        "texture_status": "disabled",
+        "texture_status_reason": "texture disabled",
+        "plan_confidence": 0.9,
+        "source_timestamp_ns": 41690605271545,
+        "equivalent_yaws_deg": [
+          136.82475828665605
+        ],
+        "solver_version": "legacy_123_assembly"
+      },
+      {
+        "piece_id": "piece_02",
+        "order": 2,
+        "source": {
+          "frame": "table_mm",
+          "center_mm": [
+            147.79403114318848,
+            212.8005256652832
+          ],
+          "yaw_deg": 56.73759757042675
+        },
+        "target": {
+          "frame": "table_mm",
+          "center_mm": [
+            86.74551319566554,
+            85.3648939784876
+          ],
+          "yaw_deg": -30.623144772119645
+        },
+        "geometry_score": 6.095054868156681,
+        "texture_score": null,
+        "texture_status": "disabled",
+        "texture_status_reason": "texture disabled",
+        "plan_confidence": 0.9,
+        "source_timestamp_ns": 41690605271545,
+        "equivalent_yaws_deg": [
+          56.73759757042675
+        ],
+        "solver_version": "legacy_123_assembly"
+      },
+      {
+        "piece_id": "piece_03",
+        "order": 3,
+        "source": {
+          "frame": "table_mm",
+          "center_mm": [
+            108.81096076965332,
+            176.6296501159668
+          ],
+          "yaw_deg": 54.319804039386966
+        },
+        "target": {
+          "frame": "table_mm",
+          "center_mm": [
+            64.29966770071141,
+            81.11715109315776
+          ],
+          "yaw_deg": -42.01777343159293
+        },
+        "geometry_score": 6.095054868156681,
+        "texture_score": null,
+        "texture_status": "disabled",
+        "texture_status_reason": "texture disabled",
+        "plan_confidence": 0.9,
+        "source_timestamp_ns": 41690605271545,
+        "equivalent_yaws_deg": [
+          54.319804039386966
+        ],
+        "solver_version": "legacy_123_assembly"
+      }
+    ]
+  }
+}
