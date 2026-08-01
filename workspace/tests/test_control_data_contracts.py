@@ -152,6 +152,12 @@ class ControlDataContractsTest(unittest.TestCase):
             "so101_follower_modified_single_arm",
         )
         self.assertEqual(schema["properties"]["joint_features"]["maxItems"], 5)
+        self.assertIn("tool_orientation", schema["required"])
+        orientation = schema["properties"]["tool_orientation"]
+        self.assertFalse(orientation["additionalProperties"])
+        self.assertEqual(
+            orientation["properties"]["wrist_roll_yaw_sign"]["enum"], [-1, 1]
+        )
 
 
 if __name__ == "__main__":

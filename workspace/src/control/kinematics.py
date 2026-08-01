@@ -91,9 +91,9 @@ class JointVector:
         return dict(zip(JOINT_FEATURES, self.values_deg, strict=True))
 
     def error_map(self, other: JointVector) -> dict[str, float]:
-        """逐关节误差（角度差最短距离，wrap ±180）。"""
+        """逐关节有界角误差；五个位置舵机均不得跨软限位做环绕。"""
         return {
-            feature: abs((left - right + 180.0) % 360.0 - 180.0)
+            feature: abs(left - right)
             for feature, (left, right) in zip(
                 JOINT_FEATURES,
                 zip(self.values_deg, other.values_deg),
@@ -102,14 +102,9 @@ class JointVector:
         }
 
     def max_abs_error(self, other: JointVector) -> float:
-        """最大关节误差（度）。
-
-        wrist_roll 放宽到 ±180° 后，主值表示会在边界处翻转（如 177.7° →
-        -178.5° 实际只差 3.8°），用绝对差会误报 356°。因此改用角度差
-        最短距离（wrap 到 [-180, 180]）。
-        """
+        """五个有界位置关节的最大绝对误差（degree）。"""
         return max(
-            abs((left - right + 180.0) % 360.0 - 180.0)
+            abs(left - right)
             for left, right in zip(self.values_deg, other.values_deg, strict=True)
         )
 
@@ -160,6 +155,8 @@ class ArmGeometry:
         tuple[float, float],
         tuple[float, float],
     ]
+    wrist_roll_yaw_sign: int
+    tool_yaw_zero_deg: float
 
     def __post_init__(self) -> None:
         if not self.calibration_id:
@@ -182,6 +179,13 @@ class ArmGeometry:
             direction not in (-1, 1) for direction in self.joint_directions
         ):
             raise ValueError("joint_directions 必须包含五个 +1/-1")
+        if self.wrist_roll_yaw_sign not in (-1, 1):
+            raise ValueError("wrist_roll_yaw_sign 必须是 +1 或 -1")
+        object.__setattr__(
+            self,
+            "tool_yaw_zero_deg",
+            _finite_float(self.tool_yaw_zero_deg, "tool_yaw_zero_deg"),
+        )
         if len(self.joint_zero_offsets_deg) != 5:
             raise ValueError("joint_zero_offsets_deg 必须包含五轴")
         zero_offsets = tuple(
@@ -215,6 +219,8 @@ class ArmGeometry:
             "joint_directions": self.joint_directions,
             "joint_zero_offsets_deg": self.joint_zero_offsets_deg,
             "joint_limits_deg": self.joint_limits_deg,
+            "wrist_roll_yaw_sign": self.wrist_roll_yaw_sign,
+            "tool_yaw_zero_deg": self.tool_yaw_zero_deg,
         }
 
     def validate_joints(self, joints: JointVector) -> None:
@@ -274,7 +280,11 @@ class PlanarArmKinematics:
             frame="robot_base_mm",
             position_mm=(x, y, height),
             pitch_deg=_wrap_degrees(math.degrees(tool_pitch)),
-            yaw_deg=_wrap_degrees(math.degrees(pan + roll)),
+            yaw_deg=_wrap_degrees(
+                self.geometry.tool_yaw_zero_deg
+                + math.degrees(pan)
+                + self.geometry.wrist_roll_yaw_sign * math.degrees(roll)
+            ),
         )
 
     def inverse(self, pose: ToolPose) -> JointVector:
@@ -323,7 +333,9 @@ class PlanarArmKinematics:
             upper + forearm * math.cos(elbow),
         )
         wrist = tool_pitch - shoulder - elbow
-        roll = math.radians(pose.yaw_deg) - pan
+        roll = (
+            math.radians(pose.yaw_deg - self.geometry.tool_yaw_zero_deg) - pan
+        ) / self.geometry.wrist_roll_yaw_sign
         physical_deg = tuple(
             math.degrees(angle) for angle in (pan, shoulder, elbow, wrist, roll)
         )

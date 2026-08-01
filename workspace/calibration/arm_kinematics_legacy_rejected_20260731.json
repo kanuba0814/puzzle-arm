@@ -58,6 +58,10 @@
       ]
     ]
   },
+  "tool_orientation": {
+    "wrist_roll_yaw_sign": -1,
+    "yaw_zero_deg": 0.0
+  },
   "quality": {
     "status": "rejected",
     "fit_samples": 8,

@@ -390,6 +390,10 @@ def main() -> int:
             "zero_offsets_deg": rounded_list(zero_offsets),
             "soft_limits_deg": soft_limits,
         },
+        "tool_orientation": {
+            "wrist_roll_yaw_sign": -1,
+            "yaw_zero_deg": 0.0,
+        },
         "quality": quality,
         "evidence_sha256": evidence_hashes,
     }

@@ -69,6 +69,8 @@ class MotionControllerTest(unittest.TestCase):
                 (-180.0, 180.0),
                 (-180.0, 180.0),
             ),
+            wrist_roll_yaw_sign=-1,
+            tool_yaw_zero_deg=0.0,
         )
         self.model = PlanarArmKinematics(geometry)
         self.clock = ManualClock()

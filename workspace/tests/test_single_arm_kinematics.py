@@ -25,6 +25,8 @@ class SingleArmKinematicsTest(unittest.TestCase):
             joint_directions=(1, 1, 1, 1, 1),
             joint_zero_offsets_deg=(0.0, 0.0, 0.0, 0.0, 0.0),
             joint_limits_deg=((-180.0, 180.0),) * 5,
+            wrist_roll_yaw_sign=-1,
+            tool_yaw_zero_deg=0.0,
         )
         self.model = PlanarArmKinematics(self.geometry)
 
@@ -38,6 +40,23 @@ class SingleArmKinematicsTest(unittest.TestCase):
         self.assertAlmostEqual(pose.position_mm[2], -50.0, places=6)
         self.assertAlmostEqual(pose.pitch_deg, 0.0, places=6)
         self.assertAlmostEqual(pose.yaw_deg, 0.0, places=6)
+
+    def test_wrist_roll_direction_is_part_of_world_yaw_model(self) -> None:
+        pose = self.model.forward(JointVector((30.0, 0.0, 0.0, 0.0, 20.0)))
+
+        self.assertAlmostEqual(pose.yaw_deg, 10.0)
+        replay = self.model.inverse(pose)
+        self.assertAlmostEqual(replay.values_deg[4], 20.0)
+
+    def test_bounded_wrist_roll_does_not_wrap_joint_error(self) -> None:
+        near_positive_limit = JointVector((0.0, 0.0, 0.0, 0.0, 177.0))
+        near_negative_limit = JointVector((0.0, 0.0, 0.0, 0.0, -178.0))
+
+        self.assertEqual(near_positive_limit.max_abs_error(near_negative_limit), 355.0)
+        self.assertEqual(
+            near_positive_limit.error_map(near_negative_limit)["wrist_roll.pos"],
+            355.0,
+        )
 
     def test_tool_offset_keeps_forward_and_normal_components_separate(self) -> None:
         geometry = ArmGeometry(

@@ -31,6 +31,10 @@ class ArmCalibrationTest(unittest.TestCase):
                 "zero_offsets_deg": [0.0, 0.0, 0.0, 0.0, 0.0],
                 "soft_limits_deg": [[-180.0, 180.0]] * 5,
             },
+            "tool_orientation": {
+                "wrist_roll_yaw_sign": -1,
+                "yaw_zero_deg": 0.0,
+            },
             "quality": {
                 "status": "accepted",
                 "fit_samples": 8,
@@ -50,6 +54,8 @@ class ArmCalibrationTest(unittest.TestCase):
         self.assertEqual(geometry.calibration_id, "single-arm-test-v1")
         self.assertEqual(geometry.tool_forward_mm, 20.0)
         self.assertEqual(geometry.tool_normal_mm, 10.0)
+        self.assertEqual(geometry.wrist_roll_yaw_sign, -1)
+        self.assertEqual(geometry.tool_yaw_zero_deg, 0.0)
 
     def test_generated_single_arm_calibration_passes_real_quality_gate(self) -> None:
         calibration = ArmCalibration.load(
@@ -61,6 +67,7 @@ class ArmCalibrationTest(unittest.TestCase):
         geometry = calibration.require_accepted_geometry()
 
         self.assertEqual(geometry.joint_directions, (-1, -1, -1, -1, -1))
+        self.assertEqual(geometry.wrist_roll_yaw_sign, -1)
         self.assertAlmostEqual(geometry.tool_forward_mm, 101.27)
         self.assertAlmostEqual(geometry.tool_normal_mm, 18.1)
         self.assertLessEqual(calibration.quality.holdout_xy_rms_mm, 5.0)

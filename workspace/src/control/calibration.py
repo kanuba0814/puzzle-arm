@@ -120,6 +120,9 @@ class ArmCalibration:
 
         geometry_data = _mapping(payload.get("geometry_mm"), "geometry_mm")
         joint_mapping = _mapping(payload.get("joint_mapping"), "joint_mapping")
+        tool_orientation = _mapping(
+            payload.get("tool_orientation"), "tool_orientation"
+        )
         directions_data = _sequence(
             joint_mapping.get("directions"), "joint_mapping.directions"
         )
@@ -194,6 +197,14 @@ class ArmCalibration:
                 offsets[4],
             ),
             joint_limits_deg=(limits[0], limits[1], limits[2], limits[3], limits[4]),
+            wrist_roll_yaw_sign=_integer(
+                tool_orientation.get("wrist_roll_yaw_sign"),
+                "tool_orientation.wrist_roll_yaw_sign",
+            ),
+            tool_yaw_zero_deg=_number(
+                tool_orientation.get("yaw_zero_deg"),
+                "tool_orientation.yaw_zero_deg",
+            ),
         )
 
         quality_data = _mapping(payload.get("quality"), "quality")
