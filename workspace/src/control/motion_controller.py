@@ -7,7 +7,7 @@ from __future__ import annotations
 import math
 import time
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from numbers import Real
 from pathlib import Path
@@ -133,6 +133,11 @@ class MotionConfig:
     # 中间路点跟随容差：若非 None，中间点只需达到该宽松容差即继续，
     # 舵机自身加速度曲线保持连续，消除逐点停顿。最终点永远用严格 joint_tolerance_deg。
     follow_tolerance_deg: float | None = None
+    # 梯形速度规划：每个 speed_profile 的 Goal_Velocity（STS3215 寄存器 46，
+    # 单位 0.0293 RPM/LSB 约 0.176°/s·LSB；非 None 时下发，None 保持出厂默认）。
+    # 与插件 connect_bumpless 已配置的 Acceleration 配合，由舵机固件生成
+    # 加速-匀速-减速的梯形曲线，避免逐点高速冲击。
+    goal_velocity_by_profile: dict[str, int] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         for name in (
@@ -223,7 +228,9 @@ class MotionPlan:
 class JointRobot(Protocol):
     def get_observation(self) -> Mapping[str, object]: ...
 
-    def send_action(self, action: dict[str, float]) -> Mapping[str, object]: ...
+    def send_action(
+        self, action: dict[str, float], *, goal_velocity: int | None = None
+    ) -> Mapping[str, object]: ...
 
 
 class MotionController:
@@ -317,8 +324,15 @@ class MotionController:
                     final=final,
                 )
             try:
+                # 梯形速度：按 speed_profile 查表下发 Goal_Velocity，
+                # 舵机固件（Acceleration + Goal_Velocity）生成平滑曲线。
+                goal_velocity = self._config.goal_velocity_by_profile.get(
+                    goal.speed_profile
+                )
                 sent = JointVector.from_mapping(
-                    self._robot.send_action(waypoint.as_mapping())
+                    self._robot.send_action(
+                        waypoint.as_mapping(), goal_velocity=goal_velocity
+                    )
                 )
             except (ValueError, RuntimeError, OSError) as exc:
                 return self._result(

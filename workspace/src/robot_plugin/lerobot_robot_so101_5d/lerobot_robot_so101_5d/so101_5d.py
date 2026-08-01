@@ -103,8 +103,15 @@ class SO101Follower5D(SOFollower):
                     self.bus.disconnect(disable_torque=True)
             raise
 
-    def send_action(self, action: RobotAction) -> RobotAction:
-        """拒绝缺失、额外或六轴旧字段，再交由官方安全步长过滤发送。"""
+    def send_action(
+        self, action: RobotAction, *, goal_velocity: int | None = None
+    ) -> RobotAction:
+        """拒绝缺失、额外或六轴旧字段，再交由官方安全步长过滤发送。
+
+        goal_velocity: 可选，非 None 时在发送前写 Goal_Velocity 寄存器，
+        用舵机固件的速度模式（Goal_Velocity + Acceleration）生成梯形
+        速度曲线；None 保持出厂默认（可能高速冲击）。
+        """
         actual_keys = set(action)
         expected_keys = set(JOINT_FEATURES)
         if actual_keys != expected_keys:
@@ -113,5 +120,11 @@ class SO101Follower5D(SOFollower):
             raise ValueError(
                 "五轴动作字段必须精确匹配固定契约；"
                 f" missing={missing_keys}, extra={extra_keys}"
+            )
+        if goal_velocity is not None:
+            self.bus.sync_write(
+                "Goal_Velocity",
+                {motor: goal_velocity for motor in JOINT_NAMES},
+                num_retry=2,
             )
         return super().send_action(action)

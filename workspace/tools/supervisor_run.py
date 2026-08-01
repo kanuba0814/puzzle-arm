@@ -111,8 +111,27 @@ MAX_MAGNET_SETTLE_S = 5.0
 
 
 def motion_config() -> MotionConfig:
-    """快速巡检档：15 mm 插值，关节步长仍严格不超过 10°。"""
-    return MotionConfig(15.0, 10.0, 10.0, 3.0, 1, 0.02, 3.0, -20.0, -30.0, 180.0)
+    """快速巡检档：15 mm 插值，关节步长仍严格不超过 10°。
+
+    梯形速度：SAFE 空载 200 LSB ≈ 35°/s 峰值，PICK/PLACE 60 LSB ≈ 10.6°/s。
+    """
+    return MotionConfig(
+        15.0,
+        10.0,
+        10.0,
+        3.0,
+        1,
+        0.02,
+        3.0,
+        -20.0,
+        -30.0,
+        180.0,
+        goal_velocity_by_profile={
+            "EMPTY_NORMAL": 200,
+            "EMPTY_SLOW": 120,
+            "HOLDING_SLOW": 80,
+        },
+    )
 
 
 def pick_place_motion_config() -> MotionConfig:
@@ -121,6 +140,9 @@ def pick_place_motion_config() -> MotionConfig:
 
     跟随容差只用于非接触转移；MotionController 对 PICK/PLACE phase 强制
     忽略跟随容差，因为负载下宽门槛会使 TCP 提前 10-20 mm 判到位。
+
+    梯形速度：EMPTY_NORMAL 200 LSB（35°/s）空载快速转移，EMPTY_SLOW 120
+    （21°/s）接近，HOLDING_SLOW 80（14°/s）负载慢速，减少冲击与滑移。
     """
     return MotionConfig(
         max_cartesian_step_mm=15.0,
@@ -135,6 +157,11 @@ def pick_place_motion_config() -> MotionConfig:
         max_z_mm=180.0,
         transit_cartesian_step_mm=25.0,  # 转移步长；40mm 曾使单步关节跳 10.14° 超限
         follow_tolerance_deg=8.0,
+        goal_velocity_by_profile={
+            "EMPTY_NORMAL": 200,
+            "EMPTY_SLOW": 120,
+            "HOLDING_SLOW": 80,
+        },
     )
 
 

@@ -407,6 +407,18 @@ class Supervisor:
             )
 
             self._transition(SupervisorState.MOVE_PREPLACE)
+            # 两步转移，避免飞行途中旋转撞到机械臂架子：
+            # 1) 保持源 yaw 平移到目标正上方（z_safe）；
+            # 2) 在目标正上方原地旋转到目标 yaw，再下降接触。
+            # 大 Δyaw（如 -227°）若在直线飞行中线性旋转，中途可能
+            # 扫过架子/障碍物；拆开后旋转只发生在安全高度目标上方。
+            place_safe_src_yaw = ToolPose(
+                place_safe.frame,
+                place_safe.position_mm,
+                place_safe.pitch_deg,
+                pick_pose.yaw_deg,
+            )
+            self._move(place_safe_src_yaw, "SAFE", "HOLDING_SLOW", piece.piece_id)
             self._move(place_safe, "SAFE", "HOLDING_SLOW", piece.piece_id)
 
             self._transition(SupervisorState.LOCAL_PLACE_ALIGN)
