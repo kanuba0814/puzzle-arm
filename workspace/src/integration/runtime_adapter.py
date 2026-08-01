@@ -23,6 +23,7 @@ from control.kinematics import (
     ToolPose,
 )
 from control.motion_controller import MotionConfig, MotionController
+from control.motion_detail_log import MotionDetailLogger
 
 from .park_sequence import JointSpaceParkMover
 from .sweep_planner import PieceRef
@@ -122,6 +123,7 @@ class InspectionHardwareAdapter:
         port: Path,
         lerobot_calibration_dir: Path,
         motion_config: MotionConfig,
+        motion_detail_log_dir: Path | None = None,
     ) -> None:
         calibration = ArmCalibration.load(calibration_path)
         self.kinematics = PlanarArmKinematics(calibration.require_accepted_geometry())
@@ -133,6 +135,11 @@ class InspectionHardwareAdapter:
         self.robot: Any | None = None
         self.motion: MotionController | None = None
         self.park_mover: JointSpaceParkMover | None = None
+        self.motion_detail_log: MotionDetailLogger | None = (
+            MotionDetailLogger(motion_detail_log_dir)
+            if motion_detail_log_dir is not None
+            else None
+        )
 
     @staticmethod
     def _load_park(path: Path) -> dict[str, float]:
@@ -173,7 +180,12 @@ class InspectionHardwareAdapter:
                 acceleration=BUMPLESS_ACCELERATION,
             )
             self.robot = robot
-            self.motion = MotionController(robot, self.kinematics, self._motion_config)
+            self.motion = MotionController(
+                robot,
+                self.kinematics,
+                self._motion_config,
+                detail_log=self.motion_detail_log,
+            )
             self.park_mover = JointSpaceParkMover(
                 robot,
                 park_deg=self._park_deg,
@@ -240,3 +252,5 @@ class InspectionHardwareAdapter:
                 self.robot = None
                 self.motion = None
                 self.park_mover = None
+        if self.motion_detail_log is not None:
+            self.motion_detail_log.close()

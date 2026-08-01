@@ -16,6 +16,8 @@ import hashlib
 import json
 import sys
 import time
+
+import numpy as np
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -184,7 +186,10 @@ def main() -> None:
         port=args.port,
         lerobot_calibration_dir=args.lerobot_calibration,
         motion_config=pick_place_motion_config(),
+        # 详细运动日志：目标位姿/规划/逐 waypoint 读回/收敛误差
+        motion_detail_log_dir=Path("/opt/epuzzle/workspace/logs/motion_detail"),
     )
+    print(f"详细运动日志: {adapter.motion_detail_log.path if adapter.motion_detail_log else 'disabled'}")
 
     # table_mm -> robot_base_mm 的坐标系旋转（contact_sheet_to_robot_base 标定）
     TABLE_TO_ROBOT_YAW_DEG = 4.43177

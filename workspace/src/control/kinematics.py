@@ -90,6 +90,17 @@ class JointVector:
     def as_mapping(self) -> dict[str, float]:
         return dict(zip(JOINT_FEATURES, self.values_deg, strict=True))
 
+    def error_map(self, other: JointVector) -> dict[str, float]:
+        """逐关节误差（角度差最短距离，wrap ±180）。"""
+        return {
+            feature: abs((left - right + 180.0) % 360.0 - 180.0)
+            for feature, (left, right) in zip(
+                JOINT_FEATURES,
+                zip(self.values_deg, other.values_deg),
+                strict=True,
+            )
+        }
+
     def max_abs_error(self, other: JointVector) -> float:
         """最大关节误差（度）。
 

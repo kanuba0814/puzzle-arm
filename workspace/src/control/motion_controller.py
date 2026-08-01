@@ -15,6 +15,7 @@ from typing import Protocol
 
 from .calibration import ArmCalibration
 from .kinematics import JointVector, PlanarArmKinematics, ToolPose
+from .motion_detail_log import MotionDetailLogger
 
 _ALLOWED_PHASES = {
     "HOME",
@@ -244,6 +245,7 @@ class MotionController:
         monotonic: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], None] = time.sleep,
         timestamp_ns: Callable[[], int] = time.monotonic_ns,
+        detail_log: MotionDetailLogger | None = None,
     ) -> None:
         self._robot = robot
         self._kinematics = kinematics
@@ -251,6 +253,9 @@ class MotionController:
         self._monotonic = monotonic
         self._sleep = sleep
         self._timestamp_ns = timestamp_ns
+        self._detail_log = detail_log
+        self._goal_id_for_log: str = ""
+        self._waypoint_index_for_log: int = -1
 
     @classmethod
     def from_calibration_file(
@@ -275,6 +280,10 @@ class MotionController:
         )
 
     def move(self, goal: MotionGoal) -> MotionResult:
+        if self._detail_log is not None:
+            self._detail_log.goal(
+                goal.goal_id, goal.as_pose(), goal.phase, goal.speed_profile
+            )
         if self._deadline_expired(goal):
             return self._result(
                 goal,
@@ -307,6 +316,15 @@ class MotionController:
                 success=False,
                 error_code=exc.error_code,
                 message=str(exc),
+            )
+        if self._detail_log is not None:
+            target_jv = self._kinematics.inverse(goal.as_pose())
+            self._detail_log.plan(
+                goal.goal_id,
+                steps=len(plan.waypoints),
+                joint_span_deg=target_jv.max_abs_error(current),
+                start_joints=current.as_mapping(),
+                target_joints=target_jv.as_mapping(),
             )
 
         executed = 0
@@ -365,6 +383,10 @@ class MotionController:
                     executed=executed,
                     final=final,
                 )
+            if self._detail_log is not None:
+                self._detail_log.waypoint_sent(
+                    goal.goal_id, index, len(plan.waypoints), waypoint.as_mapping()
+                )
             # 终点永远用严格容差；中间点可用宽松跟随容差，避免逐点停顿。
             # PICK/PLACE 接触目标不得使用跟随容差：负载下会提前判到位。
             use_follow = (
@@ -377,12 +399,19 @@ class MotionController:
                 if use_follow and self._config.follow_tolerance_deg is not None
                 else self._config.joint_tolerance_deg
             )
+            # 详细日志上下文（_wait_for_target 内记录 readback 用）
+            self._goal_id_for_log = goal.goal_id
+            self._waypoint_index_for_log = index
             converged = self._wait_for_target(
                 waypoint,
                 tolerance_deg=tolerance,
                 stable_samples=1 if use_follow else self._config.stable_samples,
             )
             if converged is None:
+                if self._detail_log is not None:
+                    self._detail_log.waypoint_timeout(
+                        goal.goal_id, index, waypoint.max_abs_error(final)
+                    )
                 return self._result(
                     goal,
                     success=False,
@@ -391,6 +420,13 @@ class MotionController:
                     planned=len(plan.waypoints),
                     executed=executed,
                     final=final,
+                )
+            if self._detail_log is not None:
+                self._detail_log.waypoint_converged(
+                    goal.goal_id,
+                    index,
+                    reads=1,
+                    final_error=converged.max_abs_error(waypoint),
                 )
             final = converged
             executed += 1
@@ -573,12 +609,24 @@ class MotionController:
         deadline = self._monotonic() + self._config.waypoint_timeout_s
         stable = 0
         latest: JointVector | None = None
+        reads = 0
         while self._monotonic() <= deadline:
             try:
                 latest = self._read_joints()
             except (ValueError, RuntimeError, OSError):
                 stable = 0
             else:
+                reads += 1
+                if self._detail_log is not None:
+                    error = latest.error_map(target)
+                    self._detail_log.readback(
+                        self._goal_id_for_log,
+                        index=self._waypoint_index_for_log,
+                        actual=latest.as_mapping(),
+                        error_deg=error,
+                        max_error=max(error.values(), default=0.0),
+                        tolerance_deg=tolerance,
+                    )
                 if latest.max_abs_error(target) <= tolerance:
                     stable += 1
                     if stable >= required_stable:
@@ -601,6 +649,16 @@ class MotionController:
         executed: int = 0,
         final: JointVector | None = None,
     ) -> MotionResult:
+        if self._detail_log is not None:
+            self._detail_log.result(
+                goal.goal_id,
+                success,
+                error_code.value,
+                executed,
+                planned,
+                duration_s=0.0,
+                final_joints={} if final is None else final.as_mapping(),
+            )
         return MotionResult(
             goal_id=goal.goal_id,
             timestamp_ns=self._timestamp_ns(),
