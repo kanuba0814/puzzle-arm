@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from control.kinematics import JointVector, ToolPose
 from control.magnet_controller import MagnetConfig, MagnetController
 from control.motion_controller import MotionConfig, MotionGoal
 from integration import (
@@ -30,7 +31,7 @@ from integration import (
     SupervisorFailure,
     VisionBatch,
 )
-from integration.competition_backend import pick_place_lock_reason
+from integration.competition_backend import JOINT_ORDER, pick_place_lock_reason
 from integration.runtime_adapter import (
     PREGRASP_HEIGHT_MM,
     SAFE_HEIGHT_MM,
@@ -51,7 +52,16 @@ CALIBRATION_PATH = (
 )
 TRANSFORM_PATH = WORKSPACE / "calibration/contact_sheet_to_robot_base_20260731.json"
 PARK_PATH = WORKSPACE / "calibration/park_pose_single_arm_20260731.json"
-HOMOGRAPHY_PATH = WORKSPACE / "calibration/table_homography_gui_20260731.npy"
+HOMOGRAPHY_PATH = (
+    WORKSPACE / "calibration/table_homography_charuco_recalibrated_20260801.npy"
+)
+LIVE_123_HOMOGRAPHY_PATH = HOMOGRAPHY_PATH
+LIVE_DETECT_123_TOOL = WORKSPACE / "tools/live_detect_123.py"
+ASSEMBLY_4PIECES_TOOL = WORKSPACE / "tools/run_assembly_4pieces.py"
+CAMERA_CALIBRATION_TOOL = WORKSPACE / "tools/calibrate_camera_workspace.py"
+GUI_COMPETITION_RUNTIME = WORKSPACE / "runtime/gui_competition"
+GUI_CAMERA_CALIBRATION_RUNTIME = WORKSPACE / "runtime/camera_calibration"
+MOTION_LOCK_CLEAR_HELPER = Path("/usr/local/sbin/epuzzle-clear-motion-lock")
 DEFAULT_PIECES_PATH = WORKSPACE / "runtime/red_piece_detection/pieces.json"
 DEFAULT_PORT = Path("/dev/serial/by-id/usb-1a86_USB_Single_Serial_5AB9067408-if00")
 DEFAULT_LEROBOT_CALIBRATION = (
@@ -73,6 +83,8 @@ COMMAND_ALIASES = {
     "competition-self-color": "competition-self-color",
     "competition-white": "competition-white",
     "competition-card": "competition-card",
+    "camera-calibration": "camera-calibration",
+    "manual-clear-motion-lock": "manual-clear-motion-lock",
     "manual-read-state": "manual-read-state",
     "manual-jog-joint": "manual-jog-joint",
     "manual-jog-cartesian": "manual-jog-cartesian",
@@ -95,6 +107,8 @@ CANONICAL_COMMAND = {
     "competition-self-color": "competition-self-color",
     "competition-white": "competition-white",
     "competition-card": "competition-card",
+    "camera-calibration": "camera-calibration",
+    "manual-clear-motion-lock": "manual-clear-motion-lock",
     "manual-read-state": "manual-read-state",
     "manual-jog-joint": "manual-jog-joint",
     "manual-jog-cartesian": "manual-jog-cartesian",
@@ -108,12 +122,20 @@ MAX_COMMISSION_HOLD_SECONDS = 300.0
 PICK_PLACE_HEIGHT_PATH = WORKSPACE / "calibration/pick_place_contact_height.json"
 VERTICAL_REFERENCE_FRAME = "calibration_sheet_mm"
 MAX_MAGNET_SETTLE_S = 5.0
+# 比赛计时仅用于报告；不再作为运行时硬截止时间。
+OFFICIAL_COMPETITION_LIMIT_S = None
+COMPETITION_CLEANUP_MARGIN_S = 15.0
+MANUAL_MAX_JOINT_DELTA_DEG = 10.0
+MANUAL_MAX_CARTESIAN_DELTA_MM = 10.0
+MANUAL_MAX_ORIENTATION_DELTA_DEG = 15.0
+CAMERA_CALIBRATION_TIMEOUT_S = 45.0
 
 
 def motion_config() -> MotionConfig:
     """快速巡检档：15 mm 插值，关节步长仍严格不超过 10°。
 
-    梯形速度：空载巡航 250 LSB（约 44°/s），接近 150 LSB，持物 100 LSB。
+    梯形速度：空载巡航最高 250 LSB（约 44°/s），接近 150 LSB，持物 100 LSB；
+    接触段仍由高度验收和 HOLDING_SLOW 门禁约束。
     """
     return MotionConfig(
         15.0,
@@ -128,9 +150,11 @@ def motion_config() -> MotionConfig:
         180.0,
         goal_velocity_by_profile={
             "EMPTY_NORMAL": 250,
-            "EMPTY_SLOW": 150,
+            "EMPTY_SLOW": 180,
             "HOLDING_SLOW": 100,
         },
+        # 现场日志显示 follow_tolerance=8° 时首个读回在约 2 ms 内被
+        # 误判为到位，导致路点以总线最快速度连发；按 profile 节流。
         waypoint_min_dwell_s_by_profile={
             "EMPTY_NORMAL": 0.15,
             "EMPTY_SLOW": 0.20,
@@ -147,8 +171,9 @@ def pick_place_motion_config() -> MotionConfig:
     跟随容差只用于非接触转移；MotionController 对 PICK/PLACE phase 强制
     忽略跟随容差，因为负载下宽门槛会使 TCP 提前 10-20 mm 判到位。
 
-    梯形速度：EMPTY_NORMAL 250、EMPTY_SLOW 150、HOLDING_SLOW 100 LSB；
-    持物档保持较慢，避免冲击和滑移。
+    梯形速度：EMPTY_NORMAL 250 LSB（约 44°/s）空载快速转移，EMPTY_SLOW 180
+    （约 31°/s，代码换算）接近，HOLDING_SLOW 100（约 18°/s）负载慢速；仍保留
+    HOLDING_SLOW 明显低于空载速度以减少冲击与滑移。
     """
     return MotionConfig(
         max_cartesian_step_mm=15.0,
@@ -157,15 +182,15 @@ def pick_place_motion_config() -> MotionConfig:
         joint_tolerance_deg=3.0,
         stable_samples=1,
         poll_interval_s=0.05,
-        waypoint_timeout_s=8.0,
+        waypoint_timeout_s=3.0,
         safe_min_z_mm=-20.0,
         contact_min_z_mm=-30.0,
         max_z_mm=180.0,
-        transit_cartesian_step_mm=25.0,
+        transit_cartesian_step_mm=25.0,  # 40mm 曾使单步关节跳 10.14° 超限
         follow_tolerance_deg=8.0,
         goal_velocity_by_profile={
             "EMPTY_NORMAL": 250,
-            "EMPTY_SLOW": 150,
+            "EMPTY_SLOW": 180,
             "HOLDING_SLOW": 100,
         },
         waypoint_min_dwell_s_by_profile={
@@ -364,6 +389,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--camera",
         default=os.environ.get("EPUZZLE_CAMERA_DEVICE", "/dev/epuzzle-camera"),
     )
+    result.add_argument(
+        "--skip-camera-refresh",
+        action="store_true",
+        help="仅现场明确回放已检查快照时使用；pick-place 默认仍强制刷新相机",
+    )
     result.add_argument("--port", type=Path, default=DEFAULT_PORT)
     result.add_argument(
         "--material",
@@ -377,6 +407,12 @@ def build_parser() -> argparse.ArgumentParser:
     result.add_argument("--result-file", type=Path)
     result.add_argument("--status-file", type=Path)
     result.add_argument("--target-angle", type=float, default=0.0)
+    result.add_argument(
+        "--lock-confirmation",
+        type=Path,
+        default=WORKSPACE / "runtime/gui/motion_lock_confirmation.json",
+        help="本地 GUI 逐项确认 clear_requires 后写入的确认文件",
+    )
     result.add_argument("--hold-seconds", type=float, default=300.0)
     # 手动页参数。
     result.add_argument("--joint-feature", type=str, default="shoulder_pan")
@@ -384,7 +420,12 @@ def build_parser() -> argparse.ArgumentParser:
     result.add_argument("--axis", type=str, default="x")
     result.add_argument("--delta", type=float, default=0.0)
     result.add_argument("--frame", type=str, default="robot_base_mm")
-    result.add_argument("--duration-s", type=float, default=3.0)
+    result.add_argument(
+        "--duration-s",
+        type=float,
+        default=3.0,
+        help="电磁铁脉冲时长，必须是大于 0 的有限秒数",
+    )
     return result
 
 
@@ -543,7 +584,7 @@ def config(
         park_tolerance_deg=4,
         park_follow_tolerance_deg=8,
         max_vision_age_ms=30_000,
-        global_timeout_s=120,
+        global_timeout_s=None,
         shadow=shadow,
         automatic_pick_place_enabled=heights is not None,
         precision_radial_compensation_mm=3,
@@ -553,6 +594,7 @@ def config(
         magnet_footprint_clearance_frozen=heights is not None,
         magnet_on_settle_s=None if heights is None else heights.magnet_on_settle_s,
         magnet_off_settle_s=None if heights is None else heights.magnet_off_settle_s,
+        vertical_approach_mm=30.0,
     )
 
 
@@ -626,7 +668,19 @@ def classify_unhandled_error(
     error: BaseException, *, mode: str, robot_port: Path
 ) -> SupervisorErrorCode:
     """只把明确的机械臂设备丢失/通信 I/O 故障映射为通信错误。"""
-    if mode not in {"sweep", "repeat", "pregrasp", "park", "commission-center"}:
+    if mode not in {
+        "sweep",
+        "repeat",
+        "pregrasp",
+        "park",
+        "commission-center",
+        "competition-self-color",
+        "competition-white",
+        "competition-card",
+        "manual-read-state",
+        "manual-jog-joint",
+        "manual-jog-cartesian",
+    }:
         return SupervisorErrorCode.SAFETY_REJECTED
     message = str(error)
     if message.startswith("相机同步检测失败:"):
@@ -696,15 +750,13 @@ def gui_result(
 def _magnet_config_from_environment() -> MagnetConfig:
     try:
         line_offset = int(os.environ.get("EPUZZLE_MAGNET_GPIO_LINE", "17"))
-        max_on_seconds = float(os.environ.get("EPUZZLE_MAGNET_MAX_ON_SECONDS", "10.0"))
     except (TypeError, ValueError, OverflowError) as error:
-        raise ValueError("电磁铁 GPIO line/通电上限配置无效") from error
+        raise ValueError("电磁铁 GPIO line 配置无效") from error
     active_high = os.environ.get("EPUZZLE_MAGNET_ACTIVE_HIGH") == "1"
     return MagnetConfig(
         chip_path=os.environ.get("EPUZZLE_MAGNET_GPIO_CHIP", "/dev/gpiochip0"),
         line_offset=line_offset,
         active_high=active_high,
-        max_on_seconds=max_on_seconds,
     )
 
 
@@ -812,22 +864,17 @@ def run_commission_center(
         magnet = connected_magnet
         write_status(args, "中心60mm保持；磁铁关闭", 0.60)
         hold_deadline = time.monotonic() + args.hold_seconds
-        last_enabled = False
         while not stop_requested and time.monotonic() < hold_deadline:
             if magnet_on_requested:
                 magnet_on_requested = False
                 magnet_off_requested = False
                 connected_magnet.set_enabled(True)
                 magnet_was_enabled = True
-                write_status(args, "中心60mm保持；磁铁开启（10秒自动关闭）", 0.70)
+                write_status(args, "中心60mm保持；磁铁开启", 0.70)
             if magnet_off_requested:
                 magnet_off_requested = False
                 connected_magnet.set_enabled(False)
                 write_status(args, "中心60mm保持；磁铁关闭", 0.70)
-            enabled = connected_magnet.get_status().enabled
-            if last_enabled and not enabled:
-                write_status(args, "中心60mm保持；磁铁已自动关闭", 0.70)
-            last_enabled = enabled
             time.sleep(0.05)
         if emergency_requested:
             raise SupervisorFailure(
@@ -893,10 +940,10 @@ def run_magnet_off(args: argparse.Namespace, started_at: float) -> dict[str, obj
 
 
 def run_magnet_pulse(args: argparse.Namespace, started_at: float) -> dict[str, object]:
-    """有界电磁铁脉冲；duration 由 GUI 控制在 (0, 10] 秒内。"""
+    """按调用方指定的有限时长吸合，结束时显式释放电磁铁。"""
     duration = args.duration_s
-    if not 0.0 < duration <= 10.0:
-        raise ValueError("duration_s 必须在 (0, 10] 范围内")
+    if not math.isfinite(duration) or duration <= 0.0:
+        raise ValueError("duration_s 必须是大于 0 的有限秒数")
     config = _magnet_config_from_environment()
     controller = MagnetController(config)
     try:
@@ -925,14 +972,573 @@ def run_magnet_pulse(args: argparse.Namespace, started_at: float) -> dict[str, o
         controller.close()
 
 
+def _active_live_homography() -> Path:
+    configured = os.environ.get("EPUZZLE_LIVE_123_HOMOGRAPHY")
+    candidate = Path(configured) if configured else LIVE_123_HOMOGRAPHY_PATH
+    if not candidate.is_file():
+        raise SupervisorFailure(
+            SupervisorErrorCode.CALIBRATION_REJECTED,
+            f"123 视觉单应矩阵不可用: {candidate}",
+        )
+    return candidate
+
+
+def _run_bounded_child(
+    argv: list[str], *, timeout_s: float | None, log_path: Path
+) -> tuple[int, bool]:
+    """运行一个子工具；超时先 SIGINT 留出 finally 清理，再才 SIGKILL。"""
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("w", encoding="utf-8") as log_file:
+        child = subprocess.Popen(
+            argv,
+            cwd=WORKSPACE.parent,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        timed_out = False
+        try:
+            deadline = None if timeout_s is None else time.monotonic() + timeout_s
+            while child.poll() is None and (
+                deadline is None or time.monotonic() < deadline
+            ):
+                time.sleep(0.10)
+            if child.poll() is None:
+                timed_out = True
+                child.send_signal(signal.SIGINT)
+                try:
+                    child.wait(timeout=10.0)
+                except subprocess.TimeoutExpired:
+                    child.kill()
+                    child.wait()
+            return child.returncode or 0, timed_out
+        except BaseException:
+            if child.poll() is None:
+                child.send_signal(signal.SIGINT)
+                try:
+                    child.wait(timeout=10.0)
+                except subprocess.TimeoutExpired:
+                    child.kill()
+                    child.wait()
+            raise
+
+
+def run_camera_calibration(
+    args: argparse.Namespace, started_at: float
+) -> dict[str, object]:
+    """采集 ChArUco 候选单应，绝不改写当前冻结正式标定。"""
+    camera_path = Path(args.camera)
+    if not camera_path.exists():
+        raise SupervisorFailure(
+            SupervisorErrorCode.VISION_NO_PIECE,
+            f"固定相机设备离线: {camera_path}",
+        )
+    if not CAMERA_CALIBRATION_TOOL.is_file():
+        raise SupervisorFailure(
+            SupervisorErrorCode.SUPERVISOR_LOCKED,
+            f"相机标定工具未部署: {CAMERA_CALIBRATION_TOOL}",
+        )
+
+    run_dir = GUI_CAMERA_CALIBRATION_RUNTIME
+    run_dir.mkdir(parents=True, exist_ok=True)
+    candidate_homography = run_dir / "candidate_homography.npy"
+    summary_path = run_dir / "candidate_summary.json"
+    calibration_log = run_dir / "camera_calibration.log"
+    # 新任务不能把上次成功的候选误报为本次成功。
+    for artifact in (candidate_homography, summary_path):
+        with contextlib.suppress(OSError):
+            artifact.unlink()
+
+    write_status(args, "采集 ChArUco 标定板", 0.20)
+    command = [
+        sys.executable,
+        str(CAMERA_CALIBRATION_TOOL),
+        "--camera",
+        str(camera_path),
+        "--samples",
+        "8",
+        "--output",
+        str(candidate_homography),
+        "--summary",
+        str(summary_path),
+    ]
+    returncode, timed_out = _run_bounded_child(
+        command,
+        timeout_s=CAMERA_CALIBRATION_TIMEOUT_S,
+        log_path=calibration_log,
+    )
+    if timed_out:
+        raise SupervisorFailure(
+            SupervisorErrorCode.GLOBAL_TIMEOUT,
+            f"相机标定超过 {CAMERA_CALIBRATION_TIMEOUT_S:.0f}s 上限",
+        )
+    if returncode != 0 or not candidate_homography.is_file() or not summary_path.is_file():
+        raise SupervisorFailure(
+            SupervisorErrorCode.VISION_NO_PIECE,
+            f"相机标定未产生有效候选（退出码 {returncode}，日志: {calibration_log}）",
+        )
+    try:
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        residual = summary["homography_residual_mm"]
+        corners = int(summary["corners"])
+        rms_mm = _finite_number(residual["rms"], "homography_residual_mm.rms")
+        max_mm = _finite_number(residual["max"], "homography_residual_mm.max")
+        candidate_sha256 = hashlib.sha256(candidate_homography.read_bytes()).hexdigest()
+    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+        raise SupervisorFailure(
+            SupervisorErrorCode.CALIBRATION_REJECTED,
+            f"相机标定候选摘要无效: {error}",
+        ) from error
+    if corners < 50 or rms_mm > 1.0 or max_mm > 3.0:
+        raise SupervisorFailure(
+            SupervisorErrorCode.CALIBRATION_REJECTED,
+            f"相机标定候选未达门槛：corners={corners}，RMS={rms_mm:.3f}mm，max={max_mm:.3f}mm",
+        )
+    if summary.get("homography_sha256") != candidate_sha256:
+        raise SupervisorFailure(
+            SupervisorErrorCode.CALIBRATION_REJECTED,
+            "相机标定候选 SHA256 与摘要不一致",
+        )
+    write_status(args, "候选标定已生成，正式标定未改写", 0.95)
+    return outcome(
+        success=True,
+        error_code=SupervisorErrorCode.NONE.value,
+        message=(
+            f"相机标定候选完成：{corners} 角点，RMS {rms_mm:.3f}mm，"
+            f"max {max_mm:.3f}mm；当前冻结单应未修改"
+        ),
+        mode=args.mode,
+        route=[],
+        duration_ms=int((time.monotonic() - started_at) * 1000),
+        final_state="CANDIDATE_READY",
+        events_path=str(calibration_log),
+    ) | {
+        "artifacts": {
+            "candidate_homography": str(candidate_homography),
+            "summary": str(summary_path),
+            "log": str(calibration_log),
+        }
+    }
+
+
+def run_competition(args: argparse.Namespace, started_at: float) -> dict[str, object]:
+    """GUI 一键比赛：新鲜 123 视觉/求解后调用已验收四片执行器。"""
+    load_pick_place_heights()
+    motion_lock_reason_value = robot_motion_lock_reason()
+    if motion_lock_reason_value is not None:
+        raise SupervisorFailure(
+            SupervisorErrorCode.SUPERVISOR_LOCKED,
+            f"机械臂运动安全锁: {motion_lock_reason_value}",
+        )
+    if not args.port.exists():
+        raise SupervisorFailure(
+            SupervisorErrorCode.ROBOT_COMM_TIMEOUT,
+            f"机械臂设备离线: {args.port}",
+        )
+    homography = _active_live_homography()
+    if not LIVE_DETECT_123_TOOL.is_file() or not ASSEMBLY_4PIECES_TOOL.is_file():
+        raise SupervisorFailure(
+            SupervisorErrorCode.SUPERVISOR_LOCKED,
+            "123 视觉或四片执行工具未部署",
+        )
+
+    run_dir = GUI_COMPETITION_RUNTIME / args.command
+    run_dir.mkdir(parents=True, exist_ok=True)
+    plan_path = run_dir / "result.json"
+    vision_log = run_dir / "vision.log"
+    assembly_log = run_dir / "assembly.log"
+
+    write_status(args, "新鲜视觉识别与123求解", 0.10)
+    vision_argv = [
+        sys.executable,
+        str(LIVE_DETECT_123_TOOL),
+        "--camera",
+        str(args.camera),
+        "--homography",
+        str(homography),
+        "--out",
+        str(run_dir),
+    ]
+    returncode, timed_out = _run_bounded_child(
+        vision_argv, timeout_s=40.0, log_path=vision_log
+    )
+    if timed_out:
+        raise SupervisorFailure(
+            SupervisorErrorCode.GLOBAL_TIMEOUT, "视觉识别超过 40s 上限"
+        )
+    if returncode != 0 or not plan_path.is_file():
+        raise SupervisorFailure(
+            SupervisorErrorCode.VISION_NO_PIECE,
+            f"123 视觉/求解失败（退出码 {returncode}，日志: {vision_log}）",
+        )
+    try:
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        solve = plan["solve"]
+        status = str(solve["status"])
+        placements = solve["placements"]
+    except (OSError, KeyError, TypeError, json.JSONDecodeError) as error:
+        raise SupervisorFailure(
+            SupervisorErrorCode.SOLVER_NO_SOLUTION,
+            f"123 求解结果无效: {error}",
+        ) from error
+    if status != "SOLVED" or not isinstance(placements, list) or len(placements) != 4:
+        raise SupervisorFailure(
+            SupervisorErrorCode.SOLVER_NO_SOLUTION,
+            f"123 求解未得到四片严格解（status={status}, count={len(placements) if isinstance(placements, list) else 'invalid'}）",
+        )
+
+    remaining_s = None
+    # run_assembly_4pieces 用该文件防止掉线后重复抓已放置碎片。新鲜视觉
+    # 计划必须从空进度开始，不能继承上一盘拼图的 done 集合。
+    assembly_state_path = run_dir / "assembly_state.json"
+    _atomic_write_json(assembly_state_path, {"done": []})
+    write_status(args, "全路径预检与四片抓放", 0.45)
+    assembly_argv = [
+        sys.executable,
+        str(ASSEMBLY_4PIECES_TOOL),
+        "--plan",
+        str(plan_path),
+        "--port",
+        str(args.port),
+        "--lerobot-calibration",
+        str(args.lerobot_calibration),
+        "--state-path",
+        str(assembly_state_path),
+    ]
+    returncode, timed_out = _run_bounded_child(
+        assembly_argv, timeout_s=remaining_s, log_path=assembly_log
+    )
+    if timed_out:
+        raise SupervisorFailure(
+            SupervisorErrorCode.GLOBAL_TIMEOUT,
+            "比赛 120s 上限已到；已向四片执行器发送 SIGINT 清理",
+        )
+    if returncode != 0:
+        raise SupervisorFailure(
+            SupervisorErrorCode.SAFETY_REJECTED,
+            f"四片执行失败（退出码 {returncode}，日志: {assembly_log}）",
+        )
+    write_status(args, "四片完成并回正式 PARK", 0.95)
+    return outcome(
+        success=True,
+        error_code=SupervisorErrorCode.NONE.value,
+        message="123 视觉、严格求解与四片抓放完成；需现场目视确认吸附/落位",
+        mode=args.mode,
+        route=[str(item.get("piece_id", "?")) for item in placements],
+        duration_ms=int((time.monotonic() - started_at) * 1000),
+        final_state="PARKED",
+        events_path=str(WORKSPACE / "logs/supervisor/assembly-4pieces.jsonl"),
+    ) | {
+        "artifacts": {
+            "frame": str(run_dir / "frame.jpg"),
+            "plan": str(plan_path),
+            "vision_log": str(vision_log),
+            "assembly_log": str(assembly_log),
+            "homography": str(homography),
+        }
+    }
+
+
+def run_manual_clear_motion_lock(
+    args: argparse.Namespace, started_at: float
+) -> dict[str, object]:
+    """仅转发本地 GUI 的人工确认给受限 root helper。"""
+    lock_reason = robot_motion_lock_reason()
+    if lock_reason is None:
+        raise SupervisorFailure(
+            SupervisorErrorCode.SUPERVISOR_LOCKED,
+            "当前不存在运动安全锁，拒绝执行解除操作",
+        )
+    confirmation_path = args.lock_confirmation.resolve(strict=False)
+    expected_confirmation = (
+        WORKSPACE / "runtime/gui/motion_lock_confirmation.json"
+    ).resolve(strict=False)
+    if confirmation_path != expected_confirmation:
+        raise SupervisorFailure(
+            SupervisorErrorCode.SAFETY_REJECTED,
+            "解除运动锁只接受 GUI 固定确认文件路径",
+        )
+    if not confirmation_path.is_file():
+        raise SupervisorFailure(
+            SupervisorErrorCode.SAFETY_REJECTED,
+            f"缺少本地人工确认文件: {confirmation_path}",
+        )
+    if not MOTION_LOCK_CLEAR_HELPER.is_file():
+        raise SupervisorFailure(
+            SupervisorErrorCode.SUPERVISOR_LOCKED,
+            f"运动锁 root helper 未部署: {MOTION_LOCK_CLEAR_HELPER}",
+        )
+    log_path = WORKSPACE / "logs/supervisor/manual-clear-motion-lock.log"
+    write_status(args, "校验现场人工解除确认", 0.20)
+    returncode, timed_out = _run_bounded_child(
+        [
+            "sudo",
+            str(MOTION_LOCK_CLEAR_HELPER),
+            "--confirmation",
+            str(confirmation_path),
+        ],
+        timeout_s=20.0,
+        log_path=log_path,
+    )
+    if timed_out:
+        raise SupervisorFailure(
+            SupervisorErrorCode.GLOBAL_TIMEOUT,
+            "人工解除运动锁 helper 超时，锁保持不变",
+        )
+    if returncode != 0:
+        raise SupervisorFailure(
+            SupervisorErrorCode.SAFETY_REJECTED,
+            f"人工解除运动锁被拒绝（退出码 {returncode}，日志: {log_path}）",
+        )
+    if robot_motion_lock_reason() is not None:
+        raise SupervisorFailure(
+            SupervisorErrorCode.SAFETY_REJECTED,
+            "root helper 返回成功但运动锁仍存在，按失败处理",
+        )
+    write_status(args, "运动锁已由现场人工确认解除", 0.95)
+    return outcome(
+        success=True,
+        error_code=SupervisorErrorCode.NONE.value,
+        message="现场人工确认完成，持久运动锁已解除；后续运动仍须通过各自门禁",
+        mode=args.mode,
+        route=[],
+        duration_ms=int((time.monotonic() - started_at) * 1000),
+        final_state="UNLOCKED",
+        events_path=str(log_path),
+    ) | {"artifacts": {"confirmation": str(confirmation_path), "log": str(log_path)}}
+
+
+def _manual_read_state(args: argparse.Namespace, started_at: float) -> dict[str, object]:
+    """只读总线状态；不使能力矩、不写 Goal_Position，可在运动锁下排障。"""
+    if not args.port.exists():
+        raise SupervisorFailure(
+            SupervisorErrorCode.ROBOT_COMM_TIMEOUT,
+            f"机械臂设备离线: {args.port}",
+        )
+    from lerobot_robot_so101_5d import SO101Follower5D, SO101Follower5DConfig
+
+    robot = SO101Follower5D(
+        SO101Follower5DConfig(
+            port=str(args.port),
+            id="epuzzle-single-arm",
+            calibration_dir=args.lerobot_calibration,
+            disable_torque_on_disconnect=False,
+            use_degrees=True,
+        )
+    )
+    try:
+        robot.bus.connect()
+        if not robot.bus.is_calibrated:
+            raise SupervisorFailure(
+                SupervisorErrorCode.CALIBRATION_REJECTED,
+                "LeRobot 五轴电机标定寄存器不一致",
+            )
+        raw = robot.bus.sync_read("Present_Position", normalize=False, num_retry=2)
+        degrees = robot.bus.sync_read("Present_Position", normalize=True, num_retry=2)
+        torque = robot.bus.sync_read("Torque_Enable", normalize=False, num_retry=2)
+    finally:
+        if robot.bus.is_connected:
+            robot.bus.disconnect(disable_torque=False)
+    joint_degrees = {name: float(degrees[name]) for name in JOINT_ORDER}
+    response = outcome(
+        success=True,
+        error_code=SupervisorErrorCode.NONE.value,
+        message="五轴/TCP 只读状态已刷新（未写舵机寄存器）",
+        mode=args.mode,
+        route=[],
+        duration_ms=int((time.monotonic() - started_at) * 1000),
+        final_state="READ_ONLY",
+        events_path=str(WORKSPACE / "logs/supervisor/manual-read-state.jsonl"),
+    ) | {
+        "final_joint_deg": joint_degrees,
+        "servo_raw": {name: int(raw[name]) for name in JOINT_ORDER},
+        "torque_enable": {name: int(torque[name]) for name in JOINT_ORDER},
+    }
+    try:
+        adapter = InspectionHardwareAdapter(
+            calibration_path=CALIBRATION_PATH,
+            transform_path=TRANSFORM_PATH,
+            park_pose_path=PARK_PATH,
+            port=args.port,
+            lerobot_calibration_dir=args.lerobot_calibration,
+            motion_config=motion_config(),
+        )
+        tcp = adapter.kinematics.forward(
+            JointVector.from_mapping(
+                {f"{name}.pos": value for name, value in joint_degrees.items()}
+            )
+        )
+    except ValueError as error:
+        # 读回本身必须保留为排障工具：断力矩后关节可因重力落在已冻结的
+        # 运动软限位外，不能因此丢失 Torque_Enable 等关键只读证据。
+        response["message"] = (
+            "五轴只读状态已刷新（未写舵机寄存器）；"
+            f"当前姿态超出运动学软限位，未计算 TCP: {error}"
+        )
+        return response
+    response["tcp_pose"] = {
+        "frame": tcp.frame,
+        "position_mm": list(tcp.position_mm),
+        "pitch_deg": tcp.pitch_deg,
+        "yaw_deg": tcp.yaw_deg,
+    }
+    return response
+
+
+def _manual_target_pose(
+    args: argparse.Namespace, hardware: InspectionHardwareAdapter
+) -> ToolPose:
+    if hardware.robot is None:
+        raise RuntimeError("机械臂未连接")
+    current = JointVector.from_mapping(hardware.robot.get_observation())
+    if args.mode == "manual-jog-joint":
+        if args.joint_feature not in JOINT_ORDER:
+            raise ValueError(f"joint-feature 必须是 {JOINT_ORDER} 之一")
+        if not math.isfinite(args.delta_deg) or abs(args.delta_deg) > MANUAL_MAX_JOINT_DELTA_DEG:
+            raise ValueError(f"delta-deg 必须在 ±{MANUAL_MAX_JOINT_DELTA_DEG:g}° 内")
+        target_values = current.as_mapping()
+        feature = f"{args.joint_feature}.pos"
+        target_values[feature] = float(target_values[feature]) + args.delta_deg
+        target = JointVector.from_mapping(target_values)
+        for value, limits in zip(
+            target.values_deg, hardware.kinematics.geometry.joint_limits_deg, strict=True
+        ):
+            if not limits[0] <= value <= limits[1]:
+                raise SupervisorFailure(
+                    SupervisorErrorCode.SAFETY_REJECTED,
+                    "手动关节目标超出冻结软限位",
+                )
+        pose = hardware.kinematics.forward(target)
+        if hardware.kinematics.inverse(pose).max_abs_error(target) > 0.5:
+            raise SupervisorFailure(
+                SupervisorErrorCode.SAFETY_REJECTED,
+                "手动关节目标存在 IK 多解，拒绝下发",
+            )
+        return pose
+
+    if args.axis not in {"x", "y", "z", "pitch", "yaw"}:
+        raise ValueError("axis 必须是 x|y|z|pitch|yaw")
+    if args.frame != "robot_base_mm":
+        raise ValueError("frame 当前只支持 robot_base_mm")
+    limit = (
+        MANUAL_MAX_CARTESIAN_DELTA_MM
+        if args.axis in {"x", "y", "z"}
+        else MANUAL_MAX_ORIENTATION_DELTA_DEG
+    )
+    if not math.isfinite(args.delta) or abs(args.delta) > limit:
+        raise ValueError(f"delta 必须在 ±{limit:g} 范围内")
+    current_pose = hardware.kinematics.forward(current)
+    x, y, z = current_pose.position_mm
+    pitch, yaw = current_pose.pitch_deg, current_pose.yaw_deg
+    if args.axis == "x":
+        x += args.delta
+    elif args.axis == "y":
+        y += args.delta
+    elif args.axis == "z":
+        z += args.delta
+    elif args.axis == "pitch":
+        pitch += args.delta
+    else:
+        yaw += args.delta
+    return ToolPose("robot_base_mm", (x, y, z), pitch, yaw)
+
+
 def run_manual_command(
     args: argparse.Namespace, started_at: float
 ) -> dict[str, object]:
-    """手动运动命令占位：后端未接入时拒绝执行。"""
-    raise SupervisorFailure(
-        SupervisorErrorCode.SUPERVISOR_LOCKED,
-        f"{args.command} 后端尚未接入，保持锁定",
+    """受限维护点动：仅 PARK→HOME→安全高度小步动作→HOME→PARK。"""
+    if args.mode == "manual-read-state":
+        return _manual_read_state(args, started_at)
+    motion_lock_reason_value = robot_motion_lock_reason()
+    if motion_lock_reason_value is not None:
+        raise SupervisorFailure(
+            SupervisorErrorCode.SUPERVISOR_LOCKED,
+            f"机械臂运动安全锁: {motion_lock_reason_value}",
+        )
+    if not args.port.exists():
+        raise SupervisorFailure(
+            SupervisorErrorCode.ROBOT_COMM_TIMEOUT,
+            f"机械臂设备离线: {args.port}",
+        )
+    hardware = InspectionHardwareAdapter(
+        calibration_path=CALIBRATION_PATH,
+        transform_path=TRANSFORM_PATH,
+        park_pose_path=PARK_PATH,
+        port=args.port,
+        lerobot_calibration_dir=args.lerobot_calibration,
+        motion_config=pick_place_motion_config(),
     )
+    error: BaseException | None = None
+    park_failure = ""
+    try:
+        write_status(args, "bumpless 连接五轴", 0.15)
+        hardware.connect()
+        if hardware.motion is None or hardware.park_mover is None:
+            raise RuntimeError("机械臂适配器未完成运动初始化")
+        if not hardware.park_mover.is_at_park():
+            raise SupervisorFailure(
+                SupervisorErrorCode.PARK_MISMATCH,
+                "手动点动只允许从正式 PARK 开始",
+            )
+        write_status(args, "PARK→HOME 安全过渡", 0.30)
+        transition = hardware.park_mover.park_to_home()
+        if not transition.success:
+            raise SupervisorFailure(
+                SupervisorErrorCode.PARK_TRANSITION_FAILED, transition.message
+            )
+        target_pose = _manual_target_pose(args, hardware)
+        if target_pose.position_mm[2] < SAFE_HEIGHT_MM:
+            raise SupervisorFailure(
+                SupervisorErrorCode.SAFETY_REJECTED,
+                f"手动点动目标 TCP 高度 {target_pose.position_mm[2]:.1f}mm 低于安全高度",
+            )
+        write_status(args, "安全高度点动", 0.55)
+        result = hardware.motion.move(
+            MotionGoal(
+                goal_id=f"{args.command}-{time.monotonic_ns()}",
+                timestamp_ns=time.monotonic_ns(),
+                frame="robot_base_mm",
+                position_mm=target_pose.position_mm,
+                pitch_deg=target_pose.pitch_deg,
+                yaw_deg=target_pose.yaw_deg,
+                phase="SAFE",
+                speed_profile="EMPTY_SLOW",
+                deadline_ns=time.monotonic_ns() + 90_000_000_000,
+            )
+        )
+        if not result.success:
+            raise SupervisorFailure(
+                SupervisorErrorCode(result.error_code.value), result.message
+            )
+        write_status(args, "点动完成，回正式 PARK", 0.78)
+        return outcome(
+            success=True,
+            error_code=SupervisorErrorCode.NONE.value,
+            message="维护点动已完成；清理路径将回正式 PARK 并断力矩",
+            mode=args.mode,
+            route=[],
+            duration_ms=int((time.monotonic() - started_at) * 1000),
+            final_state="PARKING",
+            events_path=str(WORKSPACE / "logs/supervisor" / f"{args.command}.jsonl"),
+        )
+    except BaseException as caught:
+        error = caught
+        raise
+    finally:
+        if hardware.robot is not None:
+            try:
+                parked, message = hardware.attempt_park()
+                if not parked:
+                    park_failure = message
+            except BaseException as park_error:
+                park_failure = f"回正式 PARK 时异常: {park_error}"
+            finally:
+                hardware.disconnect()
+        if park_failure:
+            detail = f"手动动作清理回正式 PARK 失败: {park_failure}"
+            if error is not None:
+                raise RuntimeError(f"{error}; {detail}") from error
+            raise RuntimeError(detail)
 
 
 def run_hardware(args: argparse.Namespace, started_at: float) -> dict[str, object]:
@@ -1080,8 +1686,16 @@ def run_pick_place(args: argparse.Namespace, started_at: float) -> dict[str, obj
             f"机械臂设备离线: {args.port}",
         )
 
-    write_status(args, "刷新相机检测", 0.12)
-    refresh_detection(args, material=getattr(args, "material", "red"))
+    if getattr(args, "skip_camera_refresh", False):
+        if not args.pieces.is_file():
+            raise SupervisorFailure(
+                SupervisorErrorCode.SAFETY_REJECTED,
+                f"指定视觉快照不存在: {args.pieces}",
+            )
+        write_status(args, "使用现场明确指定的视觉快照", 0.12)
+    else:
+        write_status(args, "刷新相机检测", 0.12)
+        refresh_detection(args, material=getattr(args, "material", "red"))
 
     log_path = WORKSPACE / "logs/supervisor" / "pick-place.jsonl"
     hardware = InspectionHardwareAdapter(
@@ -1243,21 +1857,21 @@ def main() -> int:
             "competition-white",
             "competition-card",
         }:
-            raise SupervisorFailure(
-                SupervisorErrorCode.SUPERVISOR_LOCKED,
-                "比赛全流程后端尚未接入，不能一键启动",
-            )
-        if args.mode == "pick-place":
+            payload = run_competition(args, started_at)
+        elif args.mode == "camera-calibration":
+            payload = run_camera_calibration(args, started_at)
+        elif args.mode == "manual-clear-motion-lock":
+            payload = run_manual_clear_motion_lock(args, started_at)
+        elif args.mode == "pick-place":
             payload = run_pick_place(args, started_at)
+        elif args.mode == "commission-center":
+            payload = run_commission_center(args, started_at)
         elif args.mode in {
             "manual-read-state",
             "manual-jog-joint",
             "manual-jog-cartesian",
-            "commission-center",
         }:
             payload = run_manual_command(args, started_at)
-        elif args.mode == "commission-center":
-            payload = run_commission_center(args, started_at)
         elif args.mode == "manual-magnet-pulse":
             payload = run_magnet_pulse(args, started_at)
         elif args.mode == "manual-magnet-off":

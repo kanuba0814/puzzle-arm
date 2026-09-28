@@ -8,8 +8,10 @@ os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
 import pygame
+import gui_fb
 
 from gui_fb import (
+    EvdevTouchReader,
     copy_surface_to_rgb565,
     force_opaque_kms_framebuffer,
     is_widget_visible_on_manual_tab,
@@ -68,6 +70,57 @@ class ManualMenuTest(unittest.TestCase):
         self.assertTrue(is_widget_visible_on_manual_tab(back_button, "xyz"))
         self.assertTrue(is_widget_visible_on_manual_tab(joint_button, "joint"))
         self.assertFalse(is_widget_visible_on_manual_tab(joint_button, "xyz"))
+
+
+class EvdevProtocolBTest(unittest.TestCase):
+    def test_tracking_id_without_btn_touch_generates_down_and_up(self) -> None:
+        reader = EvdevTouchReader.__new__(EvdevTouchReader)
+        reader.width, reader.height = (1024, 600)
+        reader.x_range = (0, 1000)
+        reader.y_range = (0, 1000)
+        reader.raw_x, reader.raw_y = (0, 0)
+        reader._btn_touch_pressed = False
+        reader._tracking_active = False
+        reader.pressed = False
+        reader.reported_pressed = False
+        reader.last_pos = (0, 0)
+        reader.dirty = False
+        reader.pending = bytearray()
+        reader.offline = False
+        reader.descriptor = 123
+        packet = gui_fb._INPUT_EVENT.pack
+        down = b"".join(
+            (
+                packet(0, 0, gui_fb._EV_ABS, gui_fb._ABS_MT_POSITION_X, 250),
+                packet(0, 0, gui_fb._EV_ABS, gui_fb._ABS_MT_POSITION_Y, 500),
+                packet(0, 0, gui_fb._EV_ABS, gui_fb._ABS_MT_TRACKING_ID, 7),
+                packet(0, 0, gui_fb._EV_SYN, gui_fb._SYN_REPORT, 0),
+            )
+        )
+        up = b"".join(
+            (
+                packet(0, 0, gui_fb._EV_ABS, gui_fb._ABS_MT_TRACKING_ID, 0xFFFFFFFF),
+                packet(0, 0, gui_fb._EV_SYN, gui_fb._SYN_REPORT, 0),
+            )
+        )
+        reads = [down, BlockingIOError(), up, BlockingIOError()]
+        original_read = gui_fb.os.read
+
+        def fake_read(*_args):
+            value = reads.pop(0)
+            if isinstance(value, BaseException):
+                raise value
+            return value
+
+        try:
+            gui_fb.os.read = fake_read
+            first = reader.poll()
+            second = reader.poll()
+        finally:
+            gui_fb.os.read = original_read
+        self.assertEqual(first[0].type, pygame.MOUSEBUTTONDOWN)
+        self.assertEqual(first[0].pos, (256, 300))
+        self.assertEqual(second[0].type, pygame.MOUSEBUTTONUP)
 
 
 class TouchEventMappingTest(unittest.TestCase):

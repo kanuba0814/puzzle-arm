@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "calibration_id": "single-arm-extended-roll-20260801",
+  "calibration_id": "single-arm-extended-roll-wrist-roll-zero-20260801",
   "robot_type": "so101_follower_5d",
   "source_arm": "so101_follower_modified_single_arm",
   "frame": "robot_base_mm",
@@ -33,7 +33,7 @@
       67.797816,
       -54.557701,
       -4.148897,
-      -82.153846
+      0.0
     ],
     "soft_limits_deg": [
       [
@@ -67,13 +67,14 @@
     "holdout_z_max_abs_mm": 2.458668,
     "notes": [
       "2026-08-01: wrist_roll 改装后已无物理阻挡，软限位由 [-145.0, -20.0] 放宽到 [-180, 180]。依据：舵机 Min/Max_Position_Limit 实测 [0, 4095] ticks = 360.4°（其余四轴 197--239°）。放宽前四片拼装因 roll 行程仅 125° 无解。",
-      "2026-08-01: elbow_flex 软限位由 [-90.0, 90.0] 放宽到 [-95, 95]。依据：舵机 Min/Max_Position_Limit 实测 1050..3285 ticks = 196.7° 行程（约 -98.3..+98.3）。长距离平移路径（保持源 yaw）中间点曾达 90.05° 压线。"
+      "2026-08-01: elbow_flex 软限位由 [-90.0, 90.0] 放宽到 [-95, 95]。依据：舵机 Min/Max_Position_Limit 实测 1050..3285 ticks = 196.7° 行程（约 -98.3..+98.3）。长距离平移路径（保持源 yaw）中间点曾达 90.05° 压线。",
+      "2026-08-01: wrist_roll 当前机械安装姿态登记为逻辑 0°；方向保持 -1，不改变正负方向。当前姿态作为机械零位，配套舵机 Homing_Offset 复核写为 1400，使 Present_Position=2047 对应编码器逻辑 0°。"
     ]
   },
   "evidence_sha256": [
     "11bf8221865f96242963d58e5af839eb78249ed481c7e0ca829abb5cabb433d4",
     "8027f251173f1a391ca05cc5fc8f7c2396c17216dea3e8aaf4989c163be3ba75",
-    "89ea5079eb9bb35012866d736d0438d419ee57c201e51e11a61530e3e6440ca8",
+    "36b6211f1f62228350ac8f53f09bce2a04cb448278d5c36eb9231db4dcbe2eb1",
     "4dde6b01477ffe87f308f8441a18220661d92f5e128f00b237e8b24efd1dd36f"
   ]
 }

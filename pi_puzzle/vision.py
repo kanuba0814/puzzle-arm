@@ -38,7 +38,10 @@ class PuzzleVision:
     def release(self):
         if self.backend is not None:
             self.backend.release()
-        cv2.destroyAllWindows()
+        try:
+            cv2.destroyAllWindows()
+        except cv2.error:
+            pass  # 无头环境（SSH）无 GUI 窗口
 
     # ==================== 摄像头标定 ====================
 

@@ -1,11 +1,14 @@
 # pyright: reportMissingImports=false
 
+import hashlib
 import importlib.util
 import json
 import os
 import subprocess
 import sys
 import tempfile
+import time
+import types
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -37,6 +40,8 @@ class SupervisorRunCliTest(unittest.TestCase):
             "competition-self-color",
             "competition-white",
             "competition-card",
+            "camera-calibration",
+            "manual-clear-motion-lock",
             "manual-read-state",
             "manual-jog-joint",
             "manual-jog-cartesian",
@@ -69,7 +74,7 @@ class SupervisorRunCliTest(unittest.TestCase):
         self.assertEqual(args.axis, "z")
         self.assertEqual(args.delta, -2.5)
 
-    def test_unimplemented_manual_and_competition_modes_are_locked(self) -> None:
+    def test_manual_and_competition_modes_fail_closed_without_robot(self) -> None:
         for mode in (
             "competition-self-color",
             "competition-white",
@@ -85,11 +90,19 @@ class SupervisorRunCliTest(unittest.TestCase):
                         sys.executable,
                         str(TOOL_PATH),
                         mode,
+                        "--port",
+                        "/definitely/missing/epuzzle-arm",
                         "--result-file",
                         str(result_file),
                     ],
                     cwd=WORKSPACE.parent,
-                    env={**dict(os.environ), "PYTHONPATH": str(WORKSPACE / "src")},
+                    env={
+                        **dict(os.environ),
+                        "PYTHONPATH": str(WORKSPACE / "src"),
+                        "EPUZZLE_ROBOT_MOTION_LOCK": str(
+                            Path(tmp) / "no-motion-lock.json"
+                        ),
+                    },
                     text=True,
                     capture_output=True,
                     check=False,
@@ -97,7 +110,7 @@ class SupervisorRunCliTest(unittest.TestCase):
                 self.assertEqual(completed.returncode, 2, completed.stderr)
                 payload = json.loads(result_file.read_text(encoding="utf-8"))
                 self.assertEqual(payload["result"], "FAIL")
-                self.assertEqual(payload["error_code"], "SUPERVISOR_LOCKED")
+                self.assertEqual(payload["error_code"], "ROBOT_COMM_TIMEOUT")
 
     def test_manual_magnet_off_writes_result_even_without_gpio(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -167,6 +180,202 @@ class SupervisorRunCliTest(unittest.TestCase):
             ).value,
             "SAFETY_REJECTED",
         )
+
+    def test_competition_reuses_123_plan_then_four_piece_executor(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary = Path(temporary_directory)
+            port = temporary / "epuzzle-arm"
+            port.touch()
+            args = supervisor_run.build_parser().parse_args(
+                ["competition-self-color", "--port", str(port)]
+            )
+            args.command = "competition-self-color"
+            args.mode = "competition-self-color"
+            calls: list[list[str]] = []
+
+            def bounded(argv, *, timeout_s, log_path):
+                calls.append(argv)
+                log_path.parent.mkdir(parents=True, exist_ok=True)
+                log_path.write_text("test", encoding="utf-8")
+                if "live_detect_123.py" in str(argv[1]):
+                    output_dir = Path(argv[argv.index("--out") + 1])
+                    output_dir.mkdir(parents=True, exist_ok=True)
+                    (output_dir / "result.json").write_text(
+                        json.dumps(
+                            {
+                                "solve": {
+                                    "status": "SOLVED",
+                                    "placements": [
+                                        {"piece_id": f"piece_{index:02d}"}
+                                        for index in range(4)
+                                    ],
+                                }
+                            }
+                        ),
+                        encoding="utf-8",
+                    )
+                return 0, False
+
+            with (
+                patch.object(supervisor_run, "GUI_COMPETITION_RUNTIME", temporary / "runtime"),
+                patch.object(supervisor_run, "load_pick_place_heights"),
+                patch.object(supervisor_run, "robot_motion_lock_reason", return_value=None),
+                patch.object(supervisor_run, "_run_bounded_child", side_effect=bounded),
+            ):
+                payload = supervisor_run.run_competition(args, time.monotonic())
+            self.assertTrue(payload["success"])
+            self.assertEqual(payload["route"], [f"piece_{index:02d}" for index in range(4)])
+            self.assertEqual(len(calls), 2)
+            self.assertIn("live_detect_123.py", str(calls[0][1]))
+            self.assertIn("run_assembly_4pieces.py", str(calls[1][1]))
+
+    def test_manual_clear_motion_lock_uses_fixed_confirmation_and_helper(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary = Path(temporary_directory)
+            workspace = temporary / "workspace"
+            confirmation = workspace / "runtime/gui/motion_lock_confirmation.json"
+            confirmation.parent.mkdir(parents=True)
+            confirmation.write_text("{}", encoding="utf-8")
+            helper = temporary / "epuzzle-clear-motion-lock"
+            helper.touch()
+            lock = temporary / "robot-motion.lock.json"
+            lock.write_text(json.dumps({"reason": "requires operator"}), encoding="utf-8")
+            args = supervisor_run.build_parser().parse_args(["manual-clear-motion-lock"])
+            args.command = "manual-clear-motion-lock"
+            args.mode = "manual-clear-motion-lock"
+            args.lock_confirmation = confirmation
+            calls: list[list[str]] = []
+
+            def bounded(argv, *, timeout_s, log_path):
+                calls.append(argv)
+                self.assertEqual(timeout_s, 20.0)
+                lock.unlink()
+                return 0, False
+
+            with (
+                patch.dict(os.environ, {"EPUZZLE_ROBOT_MOTION_LOCK": str(lock)}),
+                patch.object(supervisor_run, "WORKSPACE", workspace),
+                patch.object(supervisor_run, "MOTION_LOCK_CLEAR_HELPER", helper),
+                patch.object(supervisor_run, "_run_bounded_child", side_effect=bounded),
+            ):
+                payload = supervisor_run.run_manual_clear_motion_lock(
+                    args, time.monotonic()
+                )
+            self.assertTrue(payload["success"])
+            self.assertEqual(payload["final_state"], "UNLOCKED")
+            self.assertEqual(calls[0][0], "sudo")
+            self.assertEqual(calls[0][2], "--confirmation")
+            self.assertEqual(calls[0][3], str(confirmation))
+
+    def test_manual_read_keeps_torque_evidence_when_tcp_is_outside_limits(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary = Path(temporary_directory)
+            port = temporary / "epuzzle-arm"
+            port.touch()
+            args = supervisor_run.build_parser().parse_args(
+                ["manual-read-state", "--port", str(port)]
+            )
+            args.command = "manual-read-state"
+            args.mode = "manual-read-state"
+
+            class FakeBus:
+                is_calibrated = True
+                is_connected = True
+
+                def connect(self) -> None:
+                    return None
+
+                def disconnect(self, *, disable_torque: bool) -> None:
+                    self.is_connected = False
+
+                def sync_read(self, register: str, **_kwargs: object) -> dict[str, float]:
+                    if register == "Present_Position":
+                        return {
+                            name: 2048.0 if _kwargs.get("normalize") else 2048
+                            for name in supervisor_run.JOINT_ORDER
+                        }
+                    if register == "Torque_Enable":
+                        return {name: 0 for name in supervisor_run.JOINT_ORDER}
+                    raise AssertionError(register)
+
+            class FakeRobot:
+                def __init__(self, _config: object) -> None:
+                    self.bus = FakeBus()
+
+            class FakeAdapter:
+                def __init__(self, **_kwargs: object) -> None:
+                    self.kinematics = types.SimpleNamespace(
+                        forward=lambda _joints: (_ for _ in ()).throw(
+                            ValueError("elbow_flex.pos outside frozen limit")
+                        )
+                    )
+
+            fake_plugin = types.SimpleNamespace(
+                SO101Follower5D=FakeRobot,
+                SO101Follower5DConfig=lambda **_kwargs: object(),
+            )
+            with (
+                patch.dict(sys.modules, {"lerobot_robot_so101_5d": fake_plugin}),
+                patch.object(supervisor_run, "InspectionHardwareAdapter", FakeAdapter),
+            ):
+                payload = supervisor_run._manual_read_state(args, time.monotonic())
+            self.assertTrue(payload["success"])
+            self.assertEqual(
+                payload["torque_enable"],
+                {name: 0 for name in supervisor_run.JOINT_ORDER},
+            )
+            self.assertNotIn("tcp_pose", payload)
+            self.assertIn("未计算 TCP", payload["message"])
+
+    def test_camera_calibration_writes_candidate_without_hardware_adapter(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary = Path(temporary_directory)
+            camera = temporary / "epuzzle-camera"
+            camera.touch()
+            args = supervisor_run.build_parser().parse_args(
+                ["camera-calibration", "--camera", str(camera)]
+            )
+            args.command = "camera-calibration"
+            args.mode = "camera-calibration"
+
+            def bounded(argv, *, timeout_s, log_path):
+                self.assertEqual(timeout_s, 45.0)
+                self.assertEqual(argv[argv.index("--camera") + 1], str(camera))
+                self.assertNotIn(str(supervisor_run.HOMOGRAPHY_PATH), argv)
+                candidate = Path(argv[argv.index("--output") + 1])
+                summary = Path(argv[argv.index("--summary") + 1])
+                candidate.parent.mkdir(parents=True, exist_ok=True)
+                candidate.write_bytes(b"candidate")
+                summary.write_text(
+                    json.dumps(
+                        {
+                            "corners": 70,
+                            "homography_residual_mm": {"rms": 0.185, "max": 0.411},
+                            "homography_sha256": hashlib.sha256(
+                                candidate.read_bytes()
+                            ).hexdigest(),
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                return 0, False
+
+            with (
+                patch.object(
+                    supervisor_run,
+                    "GUI_CAMERA_CALIBRATION_RUNTIME",
+                    temporary / "candidate-runtime",
+                ),
+                patch.object(
+                    supervisor_run, "_run_bounded_child", side_effect=bounded,
+                ),
+                patch.object(supervisor_run, "InspectionHardwareAdapter") as adapter,
+            ):
+                payload = supervisor_run.run_camera_calibration(args, time.monotonic())
+            self.assertTrue(payload["success"])
+            self.assertEqual(payload["final_state"], "CANDIDATE_READY")
+            self.assertIn("candidate_homography", payload["artifacts"])
+            adapter.assert_not_called()
 
     def test_sweep_refreshes_detection_before_any_hardware_adapter(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

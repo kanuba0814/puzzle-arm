@@ -28,13 +28,15 @@ PROJECT_ROOT = WORKSPACE.parent
 DEFAULT_PYTHON = Path("/opt/epuzzle/venv/bin/python")
 DEFAULT_SUPERVISOR_TOOL = WORKSPACE / "tools" / "supervisor_run.py"
 DEFAULT_ROBOT_PORT = Path("/dev/epuzzle-arm")
+DEFAULT_CAMERA_DEVICE = Path("/dev/epuzzle-camera")
 DEFAULT_ROBOT_MOTION_LOCK = Path("/etc/epuzzle/robot-motion.lock.json")
 DEFAULT_LEROBOT_CALIBRATION = (
     Path.home() / ".cache/huggingface/lerobot/calibration/robots/so101_follower_5d"
 )
 
-COMPETITION_TIMEOUT_S = 120.0
-MAGNET_PULSE_TIMEOUT_S = 15.0
+# 比赛计时仅用于显示/记录；后端不再因 120 秒自动终止运行。
+COMPETITION_TIMEOUT_S = None
+MAGNET_PULSE_TIMEOUT_MARGIN_S = 15.0
 MAGNET_OFF_TIMEOUT_S = 10.0
 
 # 五轴固定顺序；禁止依赖字典遍历顺序。
@@ -171,6 +173,8 @@ class SupervisorRunBackend:
         "competition-self-color": "competition-self-color",
         "competition-white": "competition-white",
         "competition-card": "competition-card",
+        "camera-calibration": "camera-calibration",
+        "manual-clear-motion-lock": "manual-clear-motion-lock",
         "manual-read-state": "manual-read-state",
         "manual-jog-joint": "manual-jog-joint",
         "manual-jog-cartesian": "manual-jog-cartesian",
@@ -214,9 +218,11 @@ class SupervisorRunBackend:
         python_path: str | Path | None = None,
         supervisor_tool: str | Path | None = None,
         robot_port: str | Path | None = None,
+        camera_device: str | Path | None = None,
         robot_motion_lock: str | Path | None = None,
         pieces_path: str | Path | None = None,
         pick_place_calibration: str | Path | None = None,
+        unlock_confirmation_path: str | Path | None = None,
     ) -> None:
         self.python_path = Path(
             python_path
@@ -229,6 +235,10 @@ class SupervisorRunBackend:
         )
         self.robot_port = Path(
             robot_port or os.environ.get("EPUZZLE_ROBOT_PORT", str(DEFAULT_ROBOT_PORT))
+        )
+        self.camera_device = Path(
+            camera_device
+            or os.environ.get("EPUZZLE_CAMERA_DEVICE", str(DEFAULT_CAMERA_DEVICE))
         )
         self.robot_motion_lock = Path(
             robot_motion_lock
@@ -248,6 +258,13 @@ class SupervisorRunBackend:
             or os.environ.get(
                 "EPUZZLE_PICK_PLACE_CALIBRATION",
                 str(WORKSPACE / "calibration" / "pick_place_contact_height.json"),
+            )
+        )
+        self.unlock_confirmation_path = Path(
+            unlock_confirmation_path
+            or os.environ.get(
+                "EPUZZLE_UNLOCK_CONFIRMATION_PATH",
+                str(WORKSPACE / "runtime/gui/motion_lock_confirmation.json"),
             )
         )
         # 运行时覆盖，仅用于测试。
@@ -276,6 +293,21 @@ class SupervisorRunBackend:
                 command_id=command_id,
                 availability=CapabilityAvailability.READY,
                 reason="仅依赖视觉数据，不操作机械臂",
+                requires_robot=False,
+                requires_manual_unlock=False,
+            )
+        if command_id == "camera-calibration":
+            camera_ready = self.camera_device.exists()
+            return BackendCapability(
+                command_id=command_id,
+                availability=CapabilityAvailability.READY
+                if camera_ready
+                else CapabilityAvailability.LOCKED,
+                reason=(
+                    "固定相机可用；仅生成候选标定，不改写正式标定"
+                    if camera_ready
+                    else f"固定相机离线: {self.camera_device}"
+                ),
                 requires_robot=False,
                 requires_manual_unlock=False,
             )
@@ -318,35 +350,78 @@ class SupervisorRunBackend:
                 requires_manual_unlock=False,
             )
 
-        # 比赛正式流程：后端未接入时统一 UNAVAILABLE。
+        # 比赛流程复用已验收的 live_detect_123 → 123 solver → 四片抓放链路；
+        # 每次仍由 CLI 重新检查接触高度、设备节点和持久运动锁。
         if command_id in {
             "competition-self-color",
             "competition-white",
             "competition-card",
         }:
+            contact_lock = pick_place_lock_reason(self.pick_place_calibration)
+            if contact_lock is not None:
+                return BackendCapability(
+                    command_id=command_id,
+                    availability=CapabilityAvailability.LOCKED,
+                    reason=contact_lock,
+                    requires_robot=True,
+                    requires_manual_unlock=False,
+                )
             return BackendCapability(
                 command_id=command_id,
-                availability=CapabilityAvailability.UNAVAILABLE,
-                reason="比赛全流程后端尚未接入，不能一键启动",
+                availability=CapabilityAvailability.READY
+                if robot_ready
+                else CapabilityAvailability.LOCKED,
+                reason="123 视觉、求解与四片抓放链路已接通"
+                if robot_ready
+                else "机械臂离线或运动安全锁锁定",
                 requires_robot=True,
                 requires_manual_unlock=False,
             )
 
-        # 手动运动：后端未接入时 UNAVAILABLE。
-        if command_id in {
-            "manual-read-state",
-            "manual-jog-joint",
-            "manual-jog-cartesian",
-        }:
+        if command_id == "manual-clear-motion-lock":
+            lock_reason = self.robot_motion_lock_reason()
             return BackendCapability(
                 command_id=command_id,
-                availability=CapabilityAvailability.UNAVAILABLE,
-                reason="手动运动后端尚未接入",
+                availability=CapabilityAvailability.READY
+                if lock_reason is not None
+                else CapabilityAvailability.LOCKED,
+                reason=(
+                    "须在本地逐项确认 clear_requires 并长按解除"
+                    if lock_reason is not None
+                    else "当前不存在运动安全锁"
+                ),
+                requires_robot=False,
+                requires_manual_unlock=False,
+            )
+
+        # 手动读回是只读动作，允许在运动锁存在时用于诊断；点动仍须机械臂
+        # 可动作且需 GUI 会话维护解锁。
+        if command_id == "manual-read-state":
+            return BackendCapability(
+                command_id=command_id,
+                availability=CapabilityAvailability.READY
+                if self.robot_available()
+                else CapabilityAvailability.LOCKED,
+                reason="只读五轴/TCP 状态可查询"
+                if self.robot_available()
+                else "机械臂设备离线",
+                requires_robot=True,
+                requires_manual_unlock=False,
+            )
+        if command_id in {"manual-jog-joint", "manual-jog-cartesian"}:
+            return BackendCapability(
+                command_id=command_id,
+                availability=CapabilityAvailability.READY
+                if robot_ready
+                else CapabilityAvailability.LOCKED,
+                reason="维护解锁后可执行受限安全点动"
+                if robot_ready
+                else "机械臂离线或运动安全锁锁定",
                 requires_robot=True,
                 requires_manual_unlock=True,
             )
 
-        # 电磁铁：立即关闭尽量可用；定时脉冲需要维护解锁且受 10 秒上限约束。
+        # 电磁铁：立即关闭尽量可用；定时脉冲需要维护解锁。
         if command_id == "manual-magnet-off":
             return BackendCapability(
                 command_id="manual-magnet-off",
@@ -406,6 +481,10 @@ class SupervisorRunBackend:
     def _build_extra_args(
         self, command_id: str, parameters: dict[str, Any]
     ) -> list[str]:
+        if command_id == "camera-calibration":
+            return ["--camera", str(self.camera_device)]
+        if command_id == "manual-clear-motion-lock":
+            return ["--lock-confirmation", str(self.unlock_confirmation_path)]
         if command_id in {
             "detect",
             "red-baseline",
@@ -440,8 +519,8 @@ class SupervisorRunBackend:
             if joint not in JOINT_ORDER:
                 raise ValueError(f"joint_feature 必须是 {JOINT_ORDER} 之一")
             delta = _finite_float(parameters.get("delta_deg", 0.0), "delta_deg")
-            if not -180.0 <= delta <= 180.0:
-                raise ValueError("delta_deg 超出合理范围")
+            if not -10.0 <= delta <= 10.0:
+                raise ValueError("delta_deg 必须在 ±10° 安全步长内")
             return ["--joint-feature", joint, "--delta-deg", f"{delta:.2f}"]
 
         if command_id == "manual-jog-cartesian":
@@ -449,6 +528,9 @@ class SupervisorRunBackend:
             if axis not in {"x", "y", "z", "pitch", "yaw"}:
                 raise ValueError("axis 必须是 x|y|z|pitch|yaw")
             delta = _finite_float(parameters.get("delta", 0.0), "delta")
+            maximum_delta = 10.0 if axis in {"x", "y", "z"} else 15.0
+            if not -maximum_delta <= delta <= maximum_delta:
+                raise ValueError(f"{axis} 点动超过 ±{maximum_delta:g} 安全步长")
             frame = str(parameters.get("frame", "robot_base_mm"))
             if frame != "robot_base_mm":
                 raise ValueError("frame 当前只支持 robot_base_mm")
@@ -456,8 +538,8 @@ class SupervisorRunBackend:
 
         if command_id == "manual-magnet-pulse":
             duration = _finite_float(parameters.get("duration_s", 3.0), "duration_s")
-            if not 0.0 < duration <= 10.0:
-                raise ValueError("duration_s 必须在 (0, 10] 范围内")
+            if duration <= 0.0:
+                raise ValueError("duration_s 必须是大于 0 的有限秒数")
             return ["--duration-s", f"{duration:.3f}"]
 
         if command_id == "manual-magnet-off":
@@ -476,15 +558,19 @@ class SupervisorRunBackend:
         raise ValueError(f"未实现参数构造: {command_id}")
 
     def _timeout_for(self, command_id: str, parameters: dict[str, Any]) -> float:
+        if command_id == "camera-calibration":
+            return 55.0
+        if command_id == "manual-clear-motion-lock":
+            return 30.0
         if command_id in {
             "competition-self-color",
             "competition-white",
             "competition-card",
         }:
-            # 官方 120 秒 + 清理余量。
-            return COMPETITION_TIMEOUT_S + 15.0
+            return None
         if command_id == "manual-magnet-pulse":
-            return MAGNET_PULSE_TIMEOUT_S
+            duration = _finite_float(parameters.get("duration_s", 3.0), "duration_s")
+            return duration + MAGNET_PULSE_TIMEOUT_MARGIN_S
         if command_id == "manual-magnet-off":
             return MAGNET_OFF_TIMEOUT_S
         if command_id == "commission-center":

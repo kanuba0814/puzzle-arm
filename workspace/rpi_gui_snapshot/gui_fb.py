@@ -174,6 +174,7 @@ _ABS_X = 0
 _ABS_Y = 1
 _ABS_MT_POSITION_X = 53
 _ABS_MT_POSITION_Y = 54
+_ABS_MT_TRACKING_ID = 57
 
 
 def scale_evdev_axis(value, minimum, maximum, screen_extent):
@@ -235,7 +236,11 @@ class LinuxFramebuffer:
             raise RuntimeError(f"无法读取 {device_path} 分辨率") from error
 
     def present(self, source):
-        pixels = copy_surface_to_rgb565(source, self.rgb565)
+        """提交逻辑画布；fb0 与触屏逻辑分辨率不一致时显式缩放。"""
+        drawable = source
+        if source.get_size() != (self.width, self.height):
+            drawable = pygame.transform.smoothscale(source, (self.width, self.height))
+        pixels = copy_surface_to_rgb565(drawable, self.rgb565)
         self.memory.seek(0)
         self.memory.write(pixels)
         del pixels
@@ -256,11 +261,17 @@ class EvdevTouchReader:
         self.y_range = self._read_axis_range(_ABS_Y)
         self.raw_x = self.x_range[0]
         self.raw_y = self.y_range[0]
+        self._btn_touch_pressed = False
+        self._tracking_active = False
         self.pressed = False
         self.reported_pressed = False
         self.last_pos = (0, 0)
         self.dirty = False
         self.pending = bytearray()
+        self.offline = False
+
+    def _refresh_pressed(self) -> None:
+        self.pressed = self._btn_touch_pressed or self._tracking_active
 
     @staticmethod
     def _find_device():
@@ -313,6 +324,10 @@ class EvdevTouchReader:
                 chunk = os.read(self.descriptor, _INPUT_EVENT.size * 64)
             except BlockingIOError:
                 break
+            except OSError:
+                # 触摸 USB 热拔或控制器异常不能带崩 GUI；主循环会尝试重连。
+                self.offline = True
+                break
             if not chunk:
                 break
             self.pending.extend(chunk)
@@ -329,8 +344,15 @@ class EvdevTouchReader:
                 elif code in (_ABS_Y, _ABS_MT_POSITION_Y):
                     self.raw_y = value
                     self.dirty = True
+                elif code == _ABS_MT_TRACKING_ID:
+                    # 部分 hid-multitouch 驱动只发 protocol-B tracking id，不发
+                    # BTN_TOUCH。两种信号取或，确保单指按下/抬起都能生成点击。
+                    self._tracking_active = value not in {-1, 0xFFFFFFFF}
+                    self._refresh_pressed()
+                    self.dirty = True
             elif event_type == _EV_KEY and code == _BTN_TOUCH:
-                self.pressed = bool(value)
+                self._btn_touch_pressed = bool(value)
+                self._refresh_pressed()
                 self.dirty = True
             elif event_type == _EV_SYN and code == _SYN_REPORT:
                 event = self._syn_event()
@@ -341,7 +363,9 @@ class EvdevTouchReader:
         return events
 
     def close(self):
-        os.close(self.descriptor)
+        if self.descriptor >= 0:
+            os.close(self.descriptor)
+            self.descriptor = -1
 
 
 # ==================== 控件 ====================

@@ -9,7 +9,7 @@
   "properties": {
     "enabled": {
       "type": "boolean",
-      "description": "true 表示请求吸合，false 表示请求释放；硬件超时上限不可由调用方覆盖。"
+      "description": "true 表示请求吸合，false 表示请求释放；吸合后保持到显式释放、急停或关闭。"
     }
   }
 }

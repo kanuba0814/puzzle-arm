@@ -1,0 +1,111 @@
+#!/usr/bin/python3
+"""仅允许本地 GUI 在逐项人工确认后解除持久运动锁。"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import pwd
+import stat
+import sys
+import time
+from pathlib import Path
+
+LOCK_PATH = Path("/etc/epuzzle/robot-motion.lock.json")
+CONFIRMATION_PATH = Path(
+    "/opt/epuzzle/workspace/runtime/gui/motion_lock_confirmation.json"
+)
+AUDIT_DIRECTORY = Path("/var/lib/epuzzle/motion-lock-clears")
+OPERATOR_CONFIRMATION = "EPUZZLE-MOTION-LOCK-CLEAR-V1"
+MAX_CONFIRMATION_AGE_S = 300.0
+
+
+def fail(message: str) -> int:
+    print(f"拒绝解除运动锁：{message}", file=sys.stderr)
+    return 2
+
+
+def sha256_bytes(content: bytes) -> str:
+    return hashlib.sha256(content).hexdigest()
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="受限的人工运动锁解除 helper")
+    parser.add_argument("--confirmation", type=Path, required=True)
+    args = parser.parse_args()
+    if os.geteuid() != 0:
+        return fail("必须由 root helper 执行")
+    if args.confirmation != CONFIRMATION_PATH:
+        return fail("确认文件路径不允许变更")
+    try:
+        confirmation_stat = CONFIRMATION_PATH.lstat()
+    except OSError as error:
+        return fail(f"无法读取确认文件: {error}")
+    if not stat.S_ISREG(confirmation_stat.st_mode) or stat.S_ISLNK(
+        confirmation_stat.st_mode
+    ):
+        return fail("确认文件必须是非软链接普通文件")
+    try:
+        epuzzle_uid = int(pwd.getpwnam("epuzzle").pw_uid)
+    except KeyError:
+        return fail("epuzzle 用户不存在")
+    if confirmation_stat.st_uid != epuzzle_uid:
+        return fail("确认文件必须由 epuzzle GUI 用户创建")
+    if confirmation_stat.st_mode & 0o077:
+        return fail("确认文件权限必须是 0600")
+    if time.time() - confirmation_stat.st_mtime > MAX_CONFIRMATION_AGE_S:
+        return fail("人工确认已超过 5 分钟，请重新逐项确认")
+    try:
+        lock_bytes = LOCK_PATH.read_bytes()
+        lock = json.loads(lock_bytes.decode("utf-8"))
+        confirmation = json.loads(CONFIRMATION_PATH.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        return fail(f"无法读取锁或确认文件: {error}")
+    clear_requires = lock.get("clear_requires") if isinstance(lock, dict) else None
+    requirements = (
+        confirmation.get("requirements") if isinstance(confirmation, dict) else None
+    )
+    if not isinstance(clear_requires, list) or not clear_requires:
+        return fail("锁文件缺少 clear_requires")
+    if confirmation.get("schema_version") != 1:
+        return fail("确认文件 schema_version 不正确")
+    if confirmation.get("operator_confirmation") != OPERATOR_CONFIRMATION:
+        return fail("缺少现场操作者确认")
+    if confirmation.get("lock_sha256") != sha256_bytes(lock_bytes):
+        return fail("锁文件已变化，请重新逐项确认")
+    if not isinstance(requirements, list) or len(requirements) != len(clear_requires):
+        return fail("确认清单与当前锁不一致")
+    for index, (expected, supplied) in enumerate(
+        zip(clear_requires, requirements, strict=True)
+    ):
+        if not isinstance(expected, str) or not isinstance(supplied, dict):
+            return fail(f"第 {index + 1} 项清单格式无效")
+        if supplied.get("text") != expected or supplied.get("checked") is not True:
+            return fail(f"第 {index + 1} 项未由现场操作者确认")
+
+    audit = {
+        "schema_version": 1,
+        "cleared_at_ns": time.time_ns(),
+        "lock_sha256": sha256_bytes(lock_bytes),
+        "confirmation": confirmation,
+        "cleared_lock": lock,
+    }
+    try:
+        AUDIT_DIRECTORY.mkdir(parents=True, mode=0o700, exist_ok=True)
+        audit_path = AUDIT_DIRECTORY / f"clear-{audit['cleared_at_ns']}.json"
+        audit_path.write_text(
+            json.dumps(audit, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        os.chmod(audit_path, 0o600)
+        LOCK_PATH.unlink()
+    except OSError as error:
+        return fail(f"审计或删除锁失败: {error}")
+    print(json.dumps({"success": True, "audit_path": str(audit_path)}, ensure_ascii=False))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

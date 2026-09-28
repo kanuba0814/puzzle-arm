@@ -23,6 +23,7 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import json
 import math
 import os
@@ -75,23 +76,24 @@ from integration.competition_backend import (  # noqa: E402
 TOOLS = WORKSPACE / "tools"
 DEFAULT_PYTHON = Path("/opt/epuzzle/venv/bin/python")
 CALIBRATION_DIR = WORKSPACE / "calibration"
-HOMOGRAPHY_PATH = CALIBRATION_DIR / "table_homography_gui_20260731.npy"
+HOMOGRAPHY_PATH = CALIBRATION_DIR / "table_homography_charuco_recalibrated_20260801.npy"
 PARK_PATH = CALIBRATION_DIR / "park_pose_single_arm_20260731.json"
 DEFAULT_ROBOT_PORT = Path("/dev/epuzzle-arm")
 DEFAULT_ROBOT_MOTION_LOCK = Path("/etc/epuzzle/robot-motion.lock.json")
 
 SCREEN_SIZE = (1024, 600)
 TOP_BAR_HEIGHT = 56
-BOTTOM_BAR_TOP = 536
+# 逻辑画布固定为 MPI700 的 1024×600。若 fb0 因 EDID 误协商为 1024×768，
+# LinuxFramebuffer 会显式缩放画布；触摸仍映射到这套逻辑坐标，避免 y 轴错位。
+BOTTOM_BAR_TOP = 544
 PREVIEW_SOURCE_SIZE = (1280, 720)
-
-COMPETITION_TIMEOUT_S = 120.0
 
 # 手动页离散步长。
 JOINT_STEP_OPTIONS = (0.1, 0.5, 1.0, 5.0, 10.0)
 CARTESIAN_STEP_MM_OPTIONS = (0.1, 0.5, 1.0, 5.0, 10.0)
 CARTESIAN_STEP_DEG_OPTIONS = (0.5, 1.0, 5.0, 10.0, 15.0)
 MAGNET_DURATION_OPTIONS = (1.0, 3.0, 5.0)
+LOCK_CLEAR_CONFIRMATION = "EPUZZLE-MOTION-LOCK-CLEAR-V1"
 
 STATE_LABELS = {
     "IDLE": "空闲",
@@ -176,6 +178,48 @@ class PageButton(Button):
         surface.blit(image, image.get_rect(center=self.rect.center))
 
 
+class HoldPageButton(PageButton):
+    """必须持续按住才触发的破坏性本地确认控件。"""
+
+    def __init__(
+        self,
+        *args,
+        hold_seconds: float,
+        on_too_short: Callable[[], None],
+        **kwargs,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.hold_seconds = hold_seconds
+        self.on_too_short = on_too_short
+        self._pressed_at: float | None = None
+
+    def handle(self, event) -> bool:
+        if not self.enabled or not self.visible:
+            if event.type == pygame.MOUSEBUTTONUP:
+                self.pressed = False
+                self._pressed_at = None
+            return False
+        if (
+            event.type == pygame.MOUSEBUTTONDOWN
+            and event.button == 1
+            and self.rect.collidepoint(event.pos)
+        ):
+            self.pressed = True
+            self._pressed_at = time.monotonic()
+            return True
+        if event.type == pygame.MOUSEBUTTONUP and event.button == 1 and self.pressed:
+            pressed_at = self._pressed_at
+            self.pressed = False
+            self._pressed_at = None
+            if self.rect.collidepoint(event.pos) and pressed_at is not None:
+                if time.monotonic() - pressed_at >= self.hold_seconds:
+                    self.on_click()
+                else:
+                    self.on_too_short()
+            return True
+        return False
+
+
 def display_float(value: object) -> float:
     try:
         number = float(value)  # type: ignore[arg-type]
@@ -184,21 +228,45 @@ def display_float(value: object) -> float:
     return number if math.isfinite(number) else 0.0
 
 
+def ellipsize(font: pygame.font.Font, text: str, max_width: int) -> str:
+    """按实际字形宽度截断，不能让中文状态文本遮住运行计时/进度。"""
+    if font.size(text)[0] <= max_width:
+        return text
+    suffix = "…"
+    clipped = text
+    while clipped and font.size(clipped + suffix)[0] > max_width:
+        clipped = clipped[:-1]
+    return clipped + suffix
+
+
+def logical_screen_size() -> tuple[int, int]:
+    """正式页面只支持 MPI700 的 1024×600；拒绝静默接受错误的 fb0 虚拟高度。"""
+    raw = os.environ.get("EP_GUI_LOGICAL_SIZE", "1024x600").lower()
+    try:
+        width_text, height_text = raw.split("x", 1)
+        size = (int(width_text), int(height_text))
+    except (ValueError, TypeError):
+        return SCREEN_SIZE
+    return size if size == SCREEN_SIZE else SCREEN_SIZE
+
+
 class PickPlacePage:
     def __init__(self, *, backend: CompetitionBackend | None = None) -> None:
         pygame.init()
         self.framebuffer: LinuxFramebuffer | None = None
         self.touch_reader: EvdevTouchReader | None = None
+        self._touch_retry_at = 0.0
+        self.touch_error = ""
         framebuffer_path = os.environ.get("EP_GUI_FRAMEBUFFER")
         if framebuffer_path:
-            size = LinuxFramebuffer.read_size(framebuffer_path)
-            self.screen = pygame.display.set_mode(size, depth=32)
-            self.framebuffer = LinuxFramebuffer(framebuffer_path, size)
-            self.touch_reader = EvdevTouchReader(
-                size, os.environ.get("EP_GUI_TOUCH_DEVICE")
-            )
+            framebuffer_size = LinuxFramebuffer.read_size(framebuffer_path)
+            # GUI 交互和布局恒以 1024×600 为准，不能被错误的 fb0 虚拟高度
+            # 拉伸为 768 后使触摸落点偏移。
+            self.screen = pygame.display.set_mode(logical_screen_size(), depth=32)
+            self.framebuffer = LinuxFramebuffer(framebuffer_path, framebuffer_size)
+            self._ensure_touch_reader()
         else:
-            self.screen = pygame.display.set_mode(SCREEN_SIZE)
+            self.screen = pygame.display.set_mode(logical_screen_size())
         self.width, self.height = self.screen.get_size()
 
         font_override = os.environ.get("EP_GUI_FONT")
@@ -251,6 +319,9 @@ class PickPlacePage:
 
         self.worker: threading.Thread | None = None
         self.process: subprocess.Popen[str] | None = None
+        # 在工作线程真正调用 Popen 前点击“停止”也必须取消该请求，不能让
+        # 动作进程在停止按钮之后才启动。
+        self._stop_requested = False
         self.messages: queue.Queue[tuple[object, ...]] = queue.Queue()
         self.current_action: ActionInfo | None = None
         self.heartbeat: dict[str, object] | None = None
@@ -261,7 +332,6 @@ class PickPlacePage:
 
         # 比赛页状态。
         self.competition_mode: str | None = None
-        self.competition_started_monotonic: float | None = None
         # 动作超时覆盖（仅用于测试/调试）。
         self.timeout_overrides: dict[str, float] = {}
 
@@ -291,6 +361,13 @@ class PickPlacePage:
         self.debug_texture = False
         self.debug_act = False
 
+        # 人工解除运动锁页只记录本地触屏操作者对当前 lock 的逐项确认；实际
+        # 删除仍由受限 root helper 二次校验 confirmation 与 lock SHA256。
+        self.unlock_requirements: list[str] = []
+        self.unlock_checked: list[bool] = []
+        self.unlock_lock_sha256 = ""
+        self.unlock_error = ""
+
         self.estop_button = PageButton(
             (self.width - 128, 4, 120, 48),
             "急停",
@@ -300,7 +377,7 @@ class PickPlacePage:
             action=False,
         )
         self.reset_button = PageButton(
-            (688, 542, 320, 48),
+            (688, 548, 320, 48),
             "回 PARK 并复位",
             self.reset_from_estop,
             color=C_RED,
@@ -312,6 +389,7 @@ class PickPlacePage:
             "run": self._build_run_page(),
             "manual": self._build_manual_page(),
             "debug": self._build_debug_page(),
+            "unlock": self._build_unlock_page(),
         }
         self.piece_list_rect = pygame.Rect(616, 108, 392, 276)
         self._reload_detection()
@@ -350,7 +428,17 @@ class PickPlacePage:
             )
         buttons.append(
             PageButton(
-                (540, 392, 460, 96),
+                (540, 440, 220, 48),
+                "停止",
+                self.safe_abort,
+                color=C_ORANGE,
+                font_key="big",
+                action=True,
+            )
+        )
+        buttons.append(
+            PageButton(
+                (776, 440, 224, 48),
                 "一键启动",
                 self.start_competition,
                 color=C_GREEN,
@@ -365,7 +453,7 @@ class PickPlacePage:
         buttons: list[PageButton] = [
             PageButton(
                 (16, 72, 140, 48),
-                "安全中止",
+                "停止",
                 self.safe_abort,
                 color=C_ORANGE,
                 action=True,
@@ -477,7 +565,7 @@ class PickPlacePage:
         for index, step in enumerate(CARTESIAN_STEP_MM_OPTIONS):
             buttons.append(
                 PageButton(
-                    (160 + index * 70, 408, 66, 44),
+                    (160 + index * 70, 400, 66, 44),
                     f"{step:g}mm",
                     lambda s=step: self._set_cartesian_step(s, is_angle=False),
                     color=C_BTN,
@@ -488,7 +576,7 @@ class PickPlacePage:
         for index, step in enumerate(CARTESIAN_STEP_DEG_OPTIONS):
             buttons.append(
                 PageButton(
-                    (160 + index * 70, 456, 66, 44),
+                    (160 + index * 70, 448, 66, 44),
                     f"{step:g}°",
                     lambda s=step: self._set_cartesian_step(s, is_angle=True),
                     color=C_BTN,
@@ -561,17 +649,19 @@ class PickPlacePage:
         buttons: list[PageButton] = []
         tool_specs = [
             ("刷新检测", self.detect, C_BLUE),
+            ("相机标定候选", self.calibrate_camera, C_ORANGE),
             ("红色基线", self.red_baseline, C_GREEN),
             ("快速巡检", self.sweep_shortest, C_GREEN),
             ("通用 Shadow", self.puzzle_shadow, C_BLUE),
             ("到 20mm", self.pregrasp_selected, C_BLUE),
             ("回 PARK", self.park, C_BTN),
             ("重新自检", self.run_self_checks, C_BTN),
+            ("人工解锁", lambda: self._goto("unlock"), C_ORANGE),
         ]
         for index, (text, callback, color) in enumerate(tool_specs):
             buttons.append(
                 PageButton(
-                    (16 + (index % 4) * 160, 72 + (index // 4) * 56, 150, 48),
+                    (16 + (index % 5) * 196, 68 + (index // 5) * 52, 184, 44),
                     text,
                     callback,
                     color=color,
@@ -589,7 +679,7 @@ class PickPlacePage:
         for index, (label, attr) in enumerate(switches):
             buttons.append(
                 PageButton(
-                    (16 + (index % 3) * 200, 200 + (index // 3) * 52, 190, 44),
+                    (16 + (index % 3) * 200, 316 + (index // 3) * 48, 190, 44),
                     label,
                     lambda a=attr: self._toggle_debug_switch(a),
                     color=C_BTN,
@@ -599,15 +689,48 @@ class PickPlacePage:
         buttons.extend(self._page_nav_buttons(y=494))
         return {"buttons": buttons, "draw": self._draw_debug}
 
+    def _build_unlock_page(self) -> PageEntry:
+        buttons: list[PageButton] = []
+        for index, requirement in enumerate(self.unlock_requirements[:5]):
+            y = 112 + index * 54
+            buttons.append(
+                PageButton(
+                    (16, y, 992, 46),
+                    f"{'☑' if self.unlock_checked[index] else '☐'} {index + 1}. {requirement}",
+                    lambda item=index: self._toggle_unlock_requirement(item),
+                    color=C_GREEN if self.unlock_checked[index] else C_BTN,
+                    action=False,
+                    font_key="tiny",
+                )
+            )
+        if self.unlock_requirements:
+            buttons.append(
+                HoldPageButton(
+                    (264, 410, 496, 52),
+                    "长按 2 秒：人工解除运动锁",
+                    self._submit_motion_lock_clear,
+                    color=C_RED,
+                    font_key="button",
+                    action=True,
+                    hold_seconds=2.0,
+                    on_too_short=lambda: self.set_message(
+                        "WARN", "请持续按住 2 秒；解除运动锁需要本地人工确认"
+                    ),
+                )
+            )
+        buttons.extend(self._page_nav_buttons(y=494))
+        return {"buttons": buttons, "draw": self._draw_unlock}
+
     def _page_nav_buttons(self, y: int) -> list[PageButton]:
         nav = [
             ("比赛", "competition"),
             ("运行", "run"),
             ("手动", "manual"),
             ("Debug", "debug"),
+            ("解锁", "unlock"),
         ]
         buttons = []
-        width = 120
+        width = 110
         gap = 12
         total = len(nav) * width + (len(nav) - 1) * gap
         start_x = (self.width - total) // 2
@@ -630,6 +753,9 @@ class PickPlacePage:
                 button.pressed = False
         if page != "manual":
             self.manual_unlocked = False
+        if page == "unlock":
+            self._load_unlock_requirements()
+            self.pages["unlock"] = self._build_unlock_page()
 
     def _set_manual_tab(self, tab: str) -> None:
         self.manual_tab = tab
@@ -637,7 +763,23 @@ class PickPlacePage:
     def _refresh_capabilities(self) -> None:
         self.capabilities = self.backend.capabilities()
 
-    # ---------------- 消息与日志 ----------------
+    # ---------------- 触摸、消息与日志 ----------------
+
+    def _ensure_touch_reader(self) -> None:
+        """触摸节点晚于 GUI 出现/热拔时重试，不能因它崩溃或阻塞显示。"""
+        if self.framebuffer is None or self.touch_reader is not None:
+            return
+        now = time.monotonic()
+        if now < self._touch_retry_at:
+            return
+        self._touch_retry_at = now + 1.0
+        try:
+            self.touch_reader = EvdevTouchReader(
+                self.screen.get_size(), os.environ.get("EP_GUI_TOUCH_DEVICE")
+            )
+            self.touch_error = ""
+        except (OSError, RuntimeError, ValueError) as error:
+            self.touch_error = f"触摸离线：{error}"
 
     def set_message(self, level: str, text: str) -> None:
         self.message_level = level
@@ -699,6 +841,7 @@ class PickPlacePage:
             if command_id in self.timeout_overrides
             else request.timeout_s
         )
+        self._stop_requested = False
         self.current_action = ActionInfo(
             command=request.command_id,
             label=label,
@@ -719,29 +862,37 @@ class PickPlacePage:
             returncode: int | None = None
             timed_out = False
             error = ""
+            # “停止”可以发生在线程创建后、Popen 前；此时绝不能再启动子进程。
+            if self._stop_requested:
+                self.messages.put(("done", None, False, "已在启动前停止"))
+                return
             try:
+                # 每次后端请求独占一个进程组：安全中止/急停/超时可以把
+                # supervisor_run 及其子进程一并 SIGINT，避免只杀父进程而让
+                # 机械臂子流程脱离 GUI 继续运行。
                 self.process = subprocess.Popen(
                     request.argv,
                     cwd=PROJECT_ROOT,
                     text=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True,
                 )
             except OSError as os_error:
                 self.messages.put(("done", None, False, f"启动失败：{os_error}"))
                 return
+            # 覆盖 Popen 极短临界区：若此时已经点击停止，立刻终止新进程组。
+            if self._stop_requested:
+                self._stop_active_process(graceful_timeout_s=10.0)
             deadline = time.monotonic() + timeout_s
             while self.process.poll() is None and time.monotonic() < deadline:
                 time.sleep(0.05)
             if self.process.poll() is None:
-                self.process.kill()
+                self._stop_active_process(graceful_timeout_s=10.0)
                 timed_out = True
-            output, _ = self.process.communicate()
+            self.process.communicate()
             returncode = self.process.returncode
             self.process = None
-            tail = (output or "").strip()[-300:]
-            if tail:
-                self.messages.put(("output", tail))
             self.messages.put(("done", returncode, timed_out, error))
 
         self.worker = threading.Thread(target=worker, daemon=True)
@@ -749,6 +900,13 @@ class PickPlacePage:
 
     def detect(self) -> None:
         self._start_backend_request("detect", "刷新检测", {})
+
+    def calibrate_camera(self) -> None:
+        self._start_backend_request(
+            "camera-calibration",
+            "相机标定候选（不改正式标定）",
+            {},
+        )
 
     def red_baseline(self) -> None:
         self._start_backend_request("red-baseline", "红色基线", {})
@@ -828,24 +986,36 @@ class PickPlacePage:
         if self.competition_mode is None:
             self.set_message("WARN", "请先选择比赛模式")
             return
-        self.competition_started_monotonic = time.monotonic()
         self._start_backend_request(
             self.competition_mode,
             "比赛自动流程",
             {},
         )
 
-    def safe_abort(self) -> None:
+    def _stop_active_process(self, *, graceful_timeout_s: float) -> None:
+        """对 GUI 启动的独立进程组先 SIGINT 再 SIGKILL，避免留下动作子进程。"""
+        self._stop_requested = True
         process = self.process
-        if process is not None and process.poll() is None:
+        if process is None or process.poll() is not None:
+            return
+        try:
+            pid = int(process.pid)
+            os.killpg(pid, signal.SIGINT)
+        except (AttributeError, OSError, TypeError, ValueError):
             process.terminate()
-            deadline = time.monotonic() + 1.0
-            while process.poll() is None and time.monotonic() < deadline:
-                time.sleep(0.02)
-            if process.poll() is None:
+        deadline = time.monotonic() + graceful_timeout_s
+        while process.poll() is None and time.monotonic() < deadline:
+            time.sleep(0.02)
+        if process.poll() is None:
+            try:
+                os.killpg(int(process.pid), signal.SIGKILL)
+            except (AttributeError, OSError, TypeError, ValueError):
                 process.kill()
-                process.wait()
-        self.set_message("WARN", "安全中止：已终止当前子进程，磁铁仍请求 OFF")
+            process.wait()
+
+    def safe_abort(self) -> None:
+        self._stop_active_process(graceful_timeout_s=10.0)
+        self.set_message("WARN", "停止：已请求终止动作，磁铁仍请求 OFF")
         self._request_magnet_off()
 
     def manual_unlock(self) -> None:
@@ -953,15 +1123,7 @@ class PickPlacePage:
     # ---------------- 急停与复位 ----------------
 
     def emergency_stop(self) -> None:
-        process = self.process
-        if process is not None and process.poll() is None:
-            process.terminate()
-            deadline = time.monotonic() + 1.0
-            while process.poll() is None and time.monotonic() < deadline:
-                time.sleep(0.02)
-            if process.poll() is None:
-                process.kill()
-                process.wait()
+        self._stop_active_process(graceful_timeout_s=1.0)
         self.state = PageState.ESTOP
         self._estop_reset_pending = False
         self.manual_unlocked = False
@@ -1076,6 +1238,58 @@ class PickPlacePage:
             return display_float(pixel[0]), display_float(pixel[1])
         return None
 
+    def _apply_manual_readback(self, payload: dict[str, object]) -> None:
+        joints = payload.get("final_joint_deg")
+        if isinstance(joints, dict):
+            self.joint_readbacks = {
+                name: display_float(joints.get(name, 0.0)) for name in JOINT_ORDER
+            }
+        tcp = payload.get("tcp_pose")
+        if isinstance(tcp, dict):
+            position = tcp.get("position_mm")
+            if isinstance(position, list) and len(position) == 3:
+                self.tcp_readback.update(
+                    {
+                        "x": display_float(position[0]),
+                        "y": display_float(position[1]),
+                        "z": display_float(position[2]),
+                        "pitch": display_float(tcp.get("pitch_deg", 0.0)),
+                        "yaw": display_float(tcp.get("yaw_deg", 0.0)),
+                    }
+                )
+
+    def _reload_competition_artifacts(self, payload: dict[str, object]) -> None:
+        """加载一键流程产物供运行页复盘；失败或损坏时不影响成功状态判定。"""
+        artifacts = payload.get("artifacts")
+        if not isinstance(artifacts, dict):
+            return
+        frame_path = artifacts.get("frame")
+        if isinstance(frame_path, str):
+            with contextlib.suppress(pygame.error, OSError):
+                self.preview = pygame.image.load(frame_path).convert()
+        plan_path = artifacts.get("plan")
+        if not isinstance(plan_path, str):
+            return
+        try:
+            plan = json.loads(Path(plan_path).read_text(encoding="utf-8"))
+            raw_pieces = plan.get("pieces", [])
+            if not isinstance(raw_pieces, list):
+                return
+            self.pieces = [
+                {
+                    "piece_id": f"piece_{int(item['id']):02d}",
+                    "center_table_mm": item.get("grip_point_table_mm")
+                    or item.get("centroid_table_mm"),
+                    "yaw_deg": item.get("angle_deg", 0.0),
+                    "confidence": 0.9,
+                }
+                for item in raw_pieces
+                if isinstance(item, dict) and isinstance(item.get("id"), int)
+            ]
+            self.selected_index = 0
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            return
+
     # ---------------- 结果/状态文件 ----------------
 
     def _read_json_file(self, path: Path) -> dict[str, object] | None:
@@ -1145,12 +1359,19 @@ class PickPlacePage:
                 self.set_message("INFO", f"{label}完成，用时 {duration:.1f}s")
             if command in {"detect", "red-baseline", "sweep-shortest"}:
                 self._reload_detection()
+            if command == "manual-read-state":
+                self._apply_manual_readback(payload)
+            if command == "manual-clear-motion-lock":
+                self._load_unlock_requirements()
+                self.pages["unlock"] = self._build_unlock_page()
+                self.run_self_checks()
+                self._refresh_capabilities()
             if command in {
                 "competition-self-color",
                 "competition-white",
                 "competition-card",
             }:
-                self.competition_started_monotonic = None
+                self._reload_competition_artifacts(payload)
             return
         fail(detail or f"result={result or 'MISSING'} returncode={returncode}")
 
@@ -1190,6 +1411,20 @@ class PickPlacePage:
                 "supervisor_run 工具",
                 "PASS" if tool_exists else "WARN",
                 "已部署" if tool_exists else "未部署（GUI 按合同调用）",
+            )
+        )
+        camera_device = Path(
+            getattr(
+                self.backend,
+                "camera_device",
+                os.environ.get("EPUZZLE_CAMERA_DEVICE", "/dev/epuzzle-camera"),
+            )
+        )
+        checks.append(
+            (
+                "固定相机",
+                "PASS" if camera_device.exists() else "FAIL",
+                str(camera_device) if camera_device.exists() else f"离线：{camera_device}",
             )
         )
         checks.append(
@@ -1258,6 +1493,80 @@ class PickPlacePage:
         self.self_checks = checks
         self._log("INFO", "自检已刷新")
 
+    def _load_unlock_requirements(self) -> None:
+        """加载当前持久锁，不把无法读取或异常内容当作可解除。"""
+        self.unlock_requirements = []
+        self.unlock_checked = []
+        self.unlock_lock_sha256 = ""
+        self.unlock_error = ""
+        try:
+            raw = self.robot_motion_lock.read_bytes()
+            payload = json.loads(raw.decode("utf-8"))
+            requirements = payload.get("clear_requires")
+            if not isinstance(requirements, list) or not 1 <= len(requirements) <= 5:
+                raise ValueError("clear_requires 必须是 1 到 5 项非空清单")
+            if not all(isinstance(item, str) and item.strip() for item in requirements):
+                raise ValueError("clear_requires 含空白或非文本项目")
+        except (OSError, UnicodeDecodeError, ValueError, json.JSONDecodeError) as error:
+            self.unlock_error = f"无法加载运动锁：{error}"
+            return
+        self.unlock_requirements = list(requirements)
+        self.unlock_checked = [False] * len(self.unlock_requirements)
+        self.unlock_lock_sha256 = hashlib.sha256(raw).hexdigest()
+
+    def _toggle_unlock_requirement(self, index: int) -> None:
+        if not 0 <= index < len(self.unlock_checked):
+            return
+        self.unlock_checked[index] = not self.unlock_checked[index]
+        self.pages["unlock"] = self._build_unlock_page()
+
+    def _submit_motion_lock_clear(self) -> None:
+        """将当前触屏操作者的完整确认写给受限 root helper 二次核验。"""
+        if self.state in (PageState.RUNNING, PageState.ESTOP):
+            self.set_message("WARN", "当前状态不能解除运动锁")
+            return
+        if not self.unlock_requirements or not all(self.unlock_checked):
+            self.set_message("WARN", "必须逐项确认 clear_requires 后才能解除运动锁")
+            return
+        try:
+            current_lock = self.robot_motion_lock.read_bytes()
+        except OSError as error:
+            self.set_message("ERROR", f"无法复核运动锁：{error}")
+            return
+        if hashlib.sha256(current_lock).hexdigest() != self.unlock_lock_sha256:
+            self._load_unlock_requirements()
+            self.pages["unlock"] = self._build_unlock_page()
+            self.set_message("WARN", "运动锁内容已变化；请重新逐项确认")
+            return
+        confirmation_path = self.gui_run_dir / "motion_lock_confirmation.json"
+        confirmation_path.parent.mkdir(parents=True, exist_ok=True)
+        confirmation = {
+            "schema_version": 1,
+            "lock_sha256": self.unlock_lock_sha256,
+            "requirements": [
+                {"text": item, "checked": checked}
+                for item, checked in zip(
+                    self.unlock_requirements, self.unlock_checked, strict=True
+                )
+            ],
+            "operator_confirmation": LOCK_CLEAR_CONFIRMATION,
+            "recorded_at_ns": time.time_ns(),
+        }
+        temporary = confirmation_path.with_suffix(".json.tmp")
+        try:
+            temporary.write_text(
+                json.dumps(confirmation, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            temporary.replace(confirmation_path)
+            os.chmod(confirmation_path, 0o600)
+        except OSError as error:
+            self.set_message("ERROR", f"无法写入人工确认：{error}")
+            return
+        self._start_backend_request(
+            "manual-clear-motion-lock", "人工解除运动锁", {}
+        )
+
     # ---------------- 事件处理 ----------------
 
     def _page_buttons(self) -> list[PageButton]:
@@ -1277,7 +1586,8 @@ class PickPlacePage:
                     button.enabled = True
                     continue
                 if busy:
-                    button.enabled = False
+                    # RUNNING 时仅“停止”仍可点；ESTOP 下全部普通动作锁定。
+                    button.enabled = button.text == "停止" and self.state == PageState.RUNNING
                     continue
                 if (
                     button.tab in {"joint", "cartesian"} or button.text == "启动电磁铁"
@@ -1290,16 +1600,36 @@ class PickPlacePage:
                     if cap is not None:
                         ready = cap.availability is CapabilityAvailability.READY
                         if ready and cap.requires_robot:
-                            ready = robot_motion_ready
+                            # manual-read-state 不下发位置/力矩命令，运动锁下仍可
+                            # 用于排障；其余机械臂动作必须处于可运动状态。
+                            ready = (
+                                self._robot_available()
+                                if cap.command_id == "manual-read-state"
+                                else robot_motion_ready
+                            )
                         button.enabled = ready
                         continue
                 button.enabled = robot_motion_ready
+        for entry in self.pages.values():
+            for button in entry["buttons"]:
+                debug_attrs = {
+                    "轮廓覆盖": "debug_overlays",
+                    "详细日志": "debug_verbose_logs",
+                    "保存证据": "debug_save_evidence",
+                    "generic vision": "debug_generic_vision",
+                    "texture": "debug_texture",
+                    "ACT": "debug_act",
+                }
+                attr = debug_attrs.get(button.text)
+                if attr is not None:
+                    button.color = C_GREEN if getattr(self, attr) else C_BTN
         self.reset_button.enabled = self.state == PageState.ESTOP and robot_motion_ready
 
     def _button_capability_id(self, text: str) -> str | None:
         mapping = {
             "一键启动": self.competition_mode,
             "刷新检测": "detect",
+            "相机标定候选": "camera-calibration",
             "红色基线": "red-baseline",
             "快速巡检": "sweep-shortest",
             "通用 Shadow": "puzzle-shadow",
@@ -1311,13 +1641,16 @@ class PickPlacePage:
             "启动电磁铁": "manual-magnet-pulse",
             "立即断电": "manual-magnet-off",
             "读取状态": "manual-read-state",
+            "长按 2 秒：人工解除运动锁": "manual-clear-motion-lock",
         }
         return mapping.get(text)
 
     def handle_event(self, raw_event) -> None:
         event = touch_event_to_mouse_event(raw_event, (self.width, self.height))
         if getattr(event, "touch", False) and hasattr(event, "pos"):
-            self.pointer_pos = event.pos
+            self.pointer_pos = (
+                None if event.type == pygame.MOUSEBUTTONUP else event.pos
+            )
         if event.type == pygame.QUIT or (
             event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE
         ):
@@ -1371,6 +1704,7 @@ class PickPlacePage:
             "run": "运行监视",
             "manual": "手动",
             "debug": "Debug",
+            "unlock": "人工解锁",
         }
         title = self.fonts["title"].render(
             f"拼图装置 · {page_names[self.page]}", True, C_TEXT
@@ -1409,10 +1743,13 @@ class PickPlacePage:
             self.screen, C_LINE, (0, BOTTOM_BAR_TOP), (self.width, BOTTOM_BAR_TOP)
         )
         color = MESSAGE_COLORS.get(self.message_level, C_TEXT)
-        message = self.fonts["big"].render(self.message_text[:30], True, color)
+        message_width = 648 if self.state == PageState.RUNNING else self.width - 32
+        message = self.fonts["big"].render(
+            ellipsize(self.fonts["big"], self.message_text, message_width), True, color
+        )
         self.screen.blit(message, (16, BOTTOM_BAR_TOP + 6))
         safety = self.fonts["tiny"].render(
-            "Z_SAFE=60mm  PREGRASP=20mm  PICK=UNKNOWN（正式抓放锁定）",
+            "Z_SAFE=60mm；接触高度来自已验收文件；PICK/PLACE 最后30mm垂直进给",
             True,
             C_DIM,
         )
@@ -1429,8 +1766,13 @@ class PickPlacePage:
                 raw = self.heartbeat.get("progress")
                 if isinstance(raw, (int, float)) and math.isfinite(raw):
                     progress = max(0.0, min(1.0, raw))
+            running_text = (
+                f"{action['label']}  {phase}"
+                if action["command"].startswith("competition-")
+                else f"{action['label']}  {phase}  {elapsed:.0f}/{timeout_s:.0f}s"
+            )
             info = self.fonts["small"].render(
-                f"{action['label']}  {phase}  {elapsed:.0f}/{timeout_s:.0f}s",
+                ellipsize(self.fonts["small"], running_text, 320),
                 True,
                 C_TEXT,
             )
@@ -1535,17 +1877,19 @@ class PickPlacePage:
                     self.screen, color, (12, y - 4, 516, 104), width=3, border_radius=10
                 )
             label = self.fonts["tiny"].render(
-                f"{title} · {score} 分 · 限时 {COMPETITION_TIMEOUT_S:.0f}s · {status_text}",
+                f"{title} · {score} 分 · {status_text}",
                 True,
                 status_color,
             )
             self.screen.blit(label, (24, y + 8))
             if selected:
                 sel = self.fonts["small"].render("◆ 已选择", True, C_ORANGE)
-                self.screen.blit(sel, (24, y + 66))
+                self.screen.blit(sel, (24, y + 60))
             if cap and cap.availability is not CapabilityAvailability.READY:
-                reason = self.fonts["tiny"].render(cap.reason[:46], True, C_ORANGE)
-                self.screen.blit(reason, (24, y + 66))
+                reason = self.fonts["tiny"].render(
+                    ellipsize(self.fonts["tiny"], cap.reason, 390), True, C_ORANGE
+                )
+                self.screen.blit(reason, (24, y + 82))
 
         check_rect = pygame.Rect(540, 72, 460, 304)
         self._panel(check_rect, "赛前检查（能力表）")
@@ -1567,7 +1911,7 @@ class PickPlacePage:
         if self.competition_mode:
             cap = self.capabilities.get(self.competition_mode)
             if cap and cap.availability is not CapabilityAvailability.READY:
-                reason_rect = pygame.Rect(540, 392, 460, 44)
+                reason_rect = pygame.Rect(540, 388, 460, 44)
                 pygame.draw.rect(self.screen, C_LOCK, reason_rect, border_radius=8)
                 pygame.draw.rect(
                     self.screen, C_ORANGE, reason_rect, width=2, border_radius=8
@@ -1579,21 +1923,12 @@ class PickPlacePage:
 
     def _draw_run(self) -> None:
         mode_text = self.competition_mode or "未选择模式"
-        elapsed = 0.0
-        if (
-            self.competition_started_monotonic is not None
-            and self.state == PageState.RUNNING
-        ):
-            elapsed = time.monotonic() - self.competition_started_monotonic
         info = self.fonts["small"].render(
-            f"模式：{mode_text}  官方限时 {COMPETITION_TIMEOUT_S:.0f}s  已用 {elapsed:.1f}s",
+            f"模式：{mode_text}  状态监视（可随时点击停止）",
             True,
             C_TEXT,
         )
         self.screen.blit(info, (16, 72))
-        if elapsed >= COMPETITION_TIMEOUT_S:
-            warn = self.fonts["small"].render("已超时", True, C_RED)
-            self.screen.blit(warn, (600, 72))
 
         stages = ["准备", "检测", "求解", "搬运", "视觉复核", "完成"]
         phase = "-"
@@ -1673,17 +2008,7 @@ class PickPlacePage:
             self.screen.blit(image, (result_rect.x + 14, result_rect.y + 34))
 
     def _draw_manual(self) -> None:
-        lock_text = (
-            "维护解锁：已解锁"
-            if self.manual_unlocked
-            else "维护解锁：未解锁（离开手动页/急停/任务自动取消）"
-        )
-        lock_color = C_GREEN if self.manual_unlocked else C_ORANGE
-        self.screen.blit(
-            self.fonts["small"].render(lock_text, True, lock_color),
-            (472, 78),
-        )
-
+        # 维护解锁状态由常驻顶栏显示；这里不再在右侧公共按钮下绘制长文本。
         if self.manual_tab == "joint":
             self._draw_manual_joint()
         else:
@@ -1729,7 +2054,7 @@ class PickPlacePage:
             self.fonts["tiny"].render(
                 f"关节步长：{self.joint_step_deg:g}°", True, C_DIM
             ),
-            (16, 420),
+            (16, 384),
         )
 
     def _draw_manual_cartesian(self) -> None:
@@ -1765,14 +2090,34 @@ class PickPlacePage:
                 True,
                 C_DIM,
             ),
-            (16, 420),
+            (16, 384),
         )
 
+    def _draw_unlock(self) -> None:
+        title = self.fonts["big"].render("人工解除运动锁（仅现场触屏操作）", True, C_ORANGE)
+        self.screen.blit(title, (16, 72))
+        if self.unlock_error:
+            error = self.fonts["small"].render(
+                ellipsize(self.fonts["small"], self.unlock_error, 960), True, C_RED
+            )
+            self.screen.blit(error, (16, 120))
+            return
+        if not self.unlock_requirements:
+            info = self.fonts["small"].render("当前没有运动锁需要解除", True, C_DIM)
+            self.screen.blit(info, (16, 120))
+            return
+        hint = self.fonts["tiny"].render(
+            "逐项确认后，持续按住红色按钮 2 秒。解除后仍须通过所有运动门禁。",
+            True,
+            C_DIM,
+        )
+        self.screen.blit(hint, (16, 94))
+
     def _draw_debug(self) -> None:
-        cap_rect = pygame.Rect(16, 132, 496, 220)
+        cap_rect = pygame.Rect(16, 176, 496, 124)
         self._panel(cap_rect, "能力矩阵")
         for index, cap in enumerate(self.capabilities.values()):
-            if index >= 6:
+            if index >= 3:
                 break
             y = cap_rect.y + 32 + index * 32
             color = (
@@ -1787,9 +2132,9 @@ class PickPlacePage:
                 self.fonts["tiny"].render(text, True, color), (cap_rect.x + 12, y)
             )
 
-        self_check_rect = pygame.Rect(528, 132, 472, 220)
+        self_check_rect = pygame.Rect(528, 176, 472, 124)
         self._panel(self_check_rect, "自检摘要")
-        for index, (name, status, detail) in enumerate(self.self_checks[:6]):
+        for index, (name, status, detail) in enumerate(self.self_checks[:3]):
             y = self_check_rect.y + 32 + index * 32
             color = (
                 C_GREEN if status == "PASS" else C_ORANGE if status == "WARN" else C_RED
@@ -1800,33 +2145,18 @@ class PickPlacePage:
                 (self_check_rect.x + 12, y),
             )
 
-        switches = [
-            ("轮廓覆盖", self.debug_overlays),
-            ("详细日志", self.debug_verbose_logs),
-            ("保存证据", self.debug_save_evidence),
-            ("generic vision", self.debug_generic_vision),
-            ("texture", self.debug_texture),
-            ("ACT", self.debug_act),
-        ]
-        switch_rect = pygame.Rect(16, 364, 992, 120)
-        self._panel(switch_rect, "本次会话开关（不修改环境/标定/运动锁）")
-        for index, (label, value) in enumerate(switches):
-            x = switch_rect.x + 12 + (index % 3) * 320
-            y = switch_rect.y + 36 + (index // 3) * 44
-            color = C_GREEN if value else C_DIM
-            self.screen.blit(
-                self.fonts["small"].render(
-                    f"{'[开]' if value else '[关]'} {label}", True, color
-                ),
-                (x, y),
-            )
+        switch_rect = pygame.Rect(16, 308, 992, 116)
+        self._panel(
+            switch_rect,
+            "本次会话开关（不修改环境/标定/运动锁；相机标定仅生成候选）",
+        )
 
-        log_rect = pygame.Rect(16, 490, 992, 40)
+        log_rect = pygame.Rect(16, 434, 992, 46)
         self._panel(log_rect, "日志尾部")
         for row, (level, text) in enumerate(self.logs[-2:]):
             color = MESSAGE_COLORS.get(level, C_TEXT)
             image = self.fonts["tiny"].render(f"[{level}] {text[:88]}", True, color)
-            self.screen.blit(image, (log_rect.x + 14, log_rect.y + 24 + row * 18))
+            self.screen.blit(image, (log_rect.x + 14, log_rect.y + 22 + row * 18))
 
     def draw(self) -> None:
         self.screen.fill(C_BG)
@@ -1837,6 +2167,9 @@ class PickPlacePage:
         for button in self._page_buttons():
             button.draw(self.screen, self.fonts)
         self._draw_bottom_bar()
+        if self.touch_error:
+            warning = self.fonts["tiny"].render(self.touch_error[:72], True, C_ORANGE)
+            self.screen.blit(warning, (16, TOP_BAR_HEIGHT + 4))
         if self.font_missing:
             text = self.fonts["small"].render(
                 "ERROR: CJK font missing - install fonts-wqy-zenhei "
@@ -1869,23 +2202,20 @@ class PickPlacePage:
         try:
             while not self.quit_requested:
                 events = list(pygame.event.get())
+                self._ensure_touch_reader()
                 if self.touch_reader is not None:
                     events.extend(self.touch_reader.poll())
+                    if self.touch_reader.offline:
+                        self.touch_reader.close()
+                        self.touch_reader = None
+                        self.touch_error = "触摸设备已断开，等待重连"
                 for raw_event in events:
                     self.handle_event(raw_event)
                 self._drain()
                 self.draw()
                 clock.tick(20)
         finally:
-            process = self.process
-            if process is not None and process.poll() is None:
-                process.terminate()
-                deadline = time.monotonic() + 1.0
-                while process.poll() is None and time.monotonic() < deadline:
-                    time.sleep(0.02)
-                if process.poll() is None:
-                    process.kill()
-                    process.wait()
+            self._stop_active_process(graceful_timeout_s=10.0)
             self._request_magnet_off()
             subprocess.run(
                 [self.python_path, str(TOOLS / "emergency_off_single_arm.py")],

@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "timestamp": "2026-08-01T15:08:25+0800",
+  "mode": "workspace-charuco-single-plane",
+  "camera": "/dev/epuzzle-camera",
+  "image_size": [
+    1280,
+    720
+  ],
+  "samples": 8,
+  "corners": 70,
+  "homography_file": "workspace/calibration/table_homography_charuco_recalibrated_20260801.npy",
+  "homography_sha256": "ed3c6e7a16b56cf290d5f098570b0929ef9bcdf36a987386ae9902fb017f8338",
+  "world_frame": "table_mm: A4 左下角原点，x 右，y 上",
+  "homography_residual_mm": {
+    "rms": 0.18459539798189192,
+    "max": 0.410751900648807
+  }
+}

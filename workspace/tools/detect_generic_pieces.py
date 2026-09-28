@@ -23,7 +23,9 @@ from vision import (
     rectify_a4_frame,
 )
 
-DEFAULT_HOMOGRAPHY = Path("workspace/calibration/table_homography_gui_20260731.npy")
+DEFAULT_HOMOGRAPHY = Path(
+    "workspace/calibration/table_homography_charuco_recalibrated_20260801.npy"
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -84,10 +86,17 @@ def main() -> int:
         px_per_mm=args.px_per_mm,
         source_image_id=f"generic-{args.material}",
     )
+    # 彩色 profile 仅用于当前开发期黑底彩片验证；实拍片的一条短边约 9 mm，
+    # 默认 20 mm 会把合法轮廓拒绝为 VISION_MERGED_BLOBS。正式白色竞赛材料
+    # 继续使用题面/工程默认 20 mm，不因开发 profile 放宽。
+    min_edge_length_mm = (
+        10.0 if args.material.strip().lower() in {"red", "green", "blue"} else 20.0
+    )
     profile = VisionProfile(
-        profile_id=f"{args.material}-{args.px_per_mm:g}ppmm",
+        profile_id=f"{args.material}-{args.px_per_mm:g}ppmm-v2",
         material=args.material,
         enable_rounded_corner_recovery=args.rounded_corners,
+        min_edge_length_mm=min_edge_length_mm,
     )
     result = observe_pieces(rectified, profile)
 

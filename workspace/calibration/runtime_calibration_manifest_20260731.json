@@ -13,11 +13,11 @@
   "artifacts": {
     "motor_calibration": {
       "runtime_file": "/home/epuzzle/.cache/huggingface/lerobot/calibration/robots/so101_follower_5d/epuzzle-single-arm.json",
-      "sha256": "89ea5079eb9bb35012866d736d0438d419ee57c201e51e11a61530e3e6440ca8"
+      "sha256": "36b6211f1f62228350ac8f53f09bce2a04cb448278d5c36eb9231db4dcbe2eb1"
     },
     "kinematic_calibration": {
       "file": "workspace/calibration/arm_kinematics_single_arm_accepted_20260731.json",
-      "sha256": "d2063e91bf90cbadcec96e79e9cad511e5a820904fd21a5074c8039747c67ee0",
+      "sha256": "f58910357feeac6fbfb10e8a9ce47256e2458979957b07c3897c6031c998f49a",
       "status": "accepted",
       "holdout_xy_rms_mm": 2.480912,
       "holdout_xy_max_mm": 3.406456,
@@ -31,21 +31,21 @@
       "equivalence_note": "GUI A4 uses the same bottom-left/x-right/y-up convention as the calibrated contact sheet; retained as an explicit runtime assumption."
     },
     "gui_a4_homography": {
-      "file": "workspace/calibration/table_homography_gui_20260731.npy",
-      "sha256": "d82e6514f9943d63f34649b1b6b228c1fda5a35be17ae6463d6b029fca9f3694",
+      "file": "workspace/calibration/table_homography_charuco_recalibrated_20260801.npy",
+      "sha256": "ed3c6e7a16b56cf290d5f098570b0929ef9bcdf36a987386ae9902fb017f8338",
       "direction": "image_px_to_table_mm",
       "image_size_px": [
         1280,
         720
       ],
-      "rms_mm": 0.257541,
-      "max_mm": 1.029862,
-      "corners": 57
+      "rms_mm": 0.18459539798189192,
+      "max_mm": 0.410751900648807,
+      "corners": 70
     },
     "park_pose": {
       "file": "workspace/calibration/park_pose_single_arm_20260731.json",
-      "sha256": "1c14bd574e0a1976d8ae5e7b303aecdcd4ec3a08aeefefc2531f82eaf00276d9",
-      "park_id": "single-arm-formal-park-20260731",
+      "sha256": "3376c617a6f94f7093be4ceb9d1724ed3aa198ed189acb9f16c16cb13c23c351",
+      "park_id": "single-arm-formal-park-wrist-roll-zero-20260801",
       "supported_pose": true
     },
     "precision_terminal_compensation": {
@@ -61,6 +61,7 @@
   "motion_heights_mm": {
     "safe": 60.0,
     "pregrasp": 20.0,
+    "vertical_approach": 30.0,
     "pick": "UNKNOWN",
     "preplace": 20.0,
     "place": "UNKNOWN"
@@ -77,12 +78,12 @@
   "safety": {
     "magnet_gpio_chip": "/dev/gpiochip0",
     "magnet_gpio_line_bcm": 17,
-    "magnet_max_on_seconds": 10.0,
     "act_enabled": false,
     "automatic_pick_place_enabled": false,
     "automatic_pick_place_blocker": "PICK and PLACE contact heights remain UNKNOWN"
   },
   "notes": [
-    "2026-08-01: 运动学标定文件更新（elbow_flex 限位 [-95,95]，wrist_roll 限位 [-180,180]，依据舵机行程实测），同步更新 sha256。"
+    "2026-08-01: 运动学标定文件更新（elbow_flex 限位 [-95,95]，wrist_roll 限位 [-180,180]，依据舵机行程实测），同步更新 sha256。",
+    "2026-08-01: wrist_roll/ID5 当前姿态登记为机械安装零位与编码器逻辑零位；Homing_Offset=1400，Present_Position=2047，方向保持 -1。"
   ]
 }

@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "command": "manual-read-state",
+  "result": "PASS",
+  "magnet_enabled": false,
+  "message": "五轴只读状态已刷新（未写舵机寄存器）；当前姿态超出运动学软限位，未计算 TCP: elbow_flex.pos=97.802° 超出软限位 [-95.000, 95.000]°",
+  "started_at_ns": 1229393773309,
+  "duration_s": 1.401,
+  "events": [
+    {
+      "error_code": "NONE",
+      "route": [],
+      "final_state": "READ_ONLY",
+      "events_path": "workspace/logs/supervisor/manual-read-state.jsonl"
+    }
+  ],
+  "success": true,
+  "error_code": "NONE",
+  "mode": "manual-read-state",
+  "route": [],
+  "duration_ms": 1401,
+  "final_state": "READ_ONLY",
+  "events_path": "workspace/logs/supervisor/manual-read-state.jsonl",
+  "final_joint_deg": {
+    "shoulder_pan": -94.63736263736264,
+    "shoulder_lift": -99.6043956043956,
+    "elbow_flex": 97.8021978021978,
+    "wrist_flex": 71.91208791208791,
+    "wrist_roll": -1.5384615384615385
+  },
+  "servo_raw": {
+    "shoulder_pan": 1081,
+    "shoulder_lift": 840,
+    "elbow_flex": 3280,
+    "wrist_flex": 2729,
+    "wrist_roll": 2030
+  },
+  "torque_enable": {
+    "shoulder_pan": 0,
+    "shoulder_lift": 0,
+    "elbow_flex": 0,
+    "wrist_flex": 0,
+    "wrist_roll": 0
+  }
+}

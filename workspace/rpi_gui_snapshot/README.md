@@ -26,7 +26,7 @@
 - GUI 的“电磁铁 吸/放”和常驻急停通过 `control.MagnetController` 控制 `/dev/gpiochip0` line 17。
 - 继电器低电平触发，连接和关闭时强制 GPIO17 输出 3.3 V 高电平。
 - 唯一控制接口：`magnet_controller.set_enabled(bool)`。
-- 单次吸合超过 10 秒自动断电；急停、GUI 退出和 GPIO 异常均走安全关闭路径。
+- 吸合后保持到显式断电；急停、GUI 退出和 GPIO 异常均走安全关闭路径。
 - 线圈电压、电流、温升与连续通电能力仍为 `UNKNOWN`，没有执行真实吸合测试。
 
 ## 触摸与 tty 修复

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "park_id": "single-arm-formal-park-20260731",
-  "captured_at": "2026-07-31T15:04:02+08:00",
+  "park_id": "single-arm-formal-park-wrist-roll-zero-20260801",
+  "captured_at": "2026-08-01T05:09:08Z",
   "robot_type": "so101_follower_5d",
   "source_arm": "so101_follower_modified_single_arm",
   "joint_features": [
@@ -12,18 +12,18 @@
     "wrist_roll.pos"
   ],
   "raw_present_position": {
-    "shoulder_pan": 1072,
-    "shoulder_lift": 834,
-    "elbow_flex": 3244,
-    "wrist_flex": 2813,
-    "wrist_roll": 1115
+    "shoulder_pan": 1078,
+    "shoulder_lift": 836,
+    "elbow_flex": 3248,
+    "wrist_flex": 2716,
+    "wrist_roll": 2047
   },
   "joint_deg": {
-    "shoulder_pan": -95.428571,
-    "shoulder_lift": -100.131868,
-    "elbow_flex": 94.637363,
-    "wrist_flex": 79.296703,
-    "wrist_roll": -81.978022
+    "shoulder_pan": -94.901099,
+    "shoulder_lift": -99.956044,
+    "elbow_flex": 94.989011,
+    "wrist_flex": 70.769231,
+    "wrist_roll": 0.0
   },
   "sample_count": 5,
   "torque_enable": {
@@ -34,7 +34,7 @@
     "wrist_roll": 0
   },
   "goal_position_commands_sent": 0,
-  "motor_calibration_sha256": "89ea5079eb9bb35012866d736d0438d419ee57c201e51e11a61530e3e6440ca8",
-  "kinematic_calibration_sha256": "c207bae180e187b6c639cc848320195dafce1f468920a0f2eba7f00c621eab38",
-  "note": "Independent supported PARK pose; may lie outside ordinary Cartesian soft limits."
+  "motor_calibration_sha256": "36b6211f1f62228350ac8f53f09bce2a04cb448278d5c36eb9231db4dcbe2eb1",
+  "kinematic_calibration_sha256": "f58910357feeac6fbfb10e8a9ce47256e2458979957b07c3897c6031c998f49a",
+  "note": "2026-08-01 现场操作者明确批准以当前稳定只读姿态作为新的正式 PARK；本次记录未发送位置命令，正式动作仍需现场支撑与急停监护。"
 }

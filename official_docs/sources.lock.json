@@ -154,21 +154,21 @@
       "id": "so-arm100-repo",
       "name": "SO-ARM100/SO-101 hardware repository",
       "authority": "TheRobotStudio 官方硬件仓库",
-      "version": "main (dynamic)",
+      "version": "main @ fda892cba81032c46c40976a48c9ceadbf40a9ca",
       "url": "https://github.com/TheRobotStudio/SO-ARM100",
-      "local_path": null,
-      "status": "dynamic-link",
-      "notes": "使用前必须本地 clone 并记录 commit；不可把 main 当固定版本"
+      "local_path": "/home/gxxl/SO-ARM100",
+      "status": "local-clone-locked",
+      "notes": "2026-08-01 本地 clone；后续更新必须重新记录 commit"
     },
     {
       "id": "so101-urdf",
       "name": "SO-101 URDF",
       "authority": "TheRobotStudio 官方仓库",
-      "version": "main (dynamic)",
+      "version": "main @ fda892cba81032c46c40976a48c9ceadbf40a9ca",
       "url": "https://github.com/TheRobotStudio/SO-ARM100/blob/main/Simulation/SO101/so101_new_calib.urdf",
-      "local_path": null,
-      "status": "dynamic-link",
-      "notes": "已有公开 issue 指出旧 URDF 可能存在限制/轴向问题；必须与实物和标定核对"
+      "local_path": "/home/gxxl/SO-ARM100/Simulation/SO101/so101_new_calib.urdf",
+      "status": "local-clone-locked",
+      "notes": "URDF 来自同一 commit；仍须与五轴改装实物和标定核对"
     },
     {
       "id": "opencv-index",

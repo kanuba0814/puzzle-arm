@@ -19,7 +19,7 @@
   5. `wrist_roll.pos`
 - 没有 leader/follower 双臂运行关系；
 - 没有 ID 6 `gripper.pos`；
-- 电磁铁独立于机械臂动作，冻结为 `/dev/gpiochip0` BCM GPIO17，低电平触发；默认高电平关闭，软件连续通电上限 10 秒；
+- 电磁铁独立于机械臂动作，冻结为 `/dev/gpiochip0` BCM GPIO17，低电平触发；默认高电平关闭，软件不再设置连续通电上限，必须显式断电；
 - `docs/14_三人分工与交接.md` 被用户明确判定为废纸，不再作为架构依据，已标记 DEPRECATED。
 
 ## 2. 树莓派连接和路径

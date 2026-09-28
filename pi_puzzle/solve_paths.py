@@ -13,6 +13,7 @@
     python3 solve_paths.py --frames 5       # 多帧投票(默认5)
     python3 solve_paths.py --no-homography  # 不用标定文件, 回退到每次检测纸边缘
 """
+
 import argparse
 import json
 import os
@@ -41,7 +42,7 @@ from rect_assembly import (
 )
 from vision import PuzzleVision
 
-OUT_DIR = 'out'
+OUT_DIR = "out"
 
 
 def get_frame(vision, args):
@@ -69,8 +70,7 @@ def detect_with_voting(vision, args, fixed_quad=None):
         frame = vision.preprocess(frame)  # 统一预处理, 保证坐标系一致
         # 暗光场景: 非局部均值去噪 (FPN噪声是检测精度杀手, 0.4s可接受)
         if frame.mean() < 100:
-            frame = cv2.fastNlMeansDenoisingColored(
-                frame, None, 15, 15, 7, 21)
+            frame = cv2.fastNlMeansDenoisingColored(frame, None, 15, 15, 7, 21)
         if fixed_quad is not None:
             quad = fixed_quad
         else:
@@ -103,18 +103,18 @@ def fix_paper_orientation(vision, quad, pieces):
     """
     if not pieces:
         return pieces
-    ys = sorted(p['centroid'][1] for p in pieces)
+    ys = sorted(p["centroid"][1] for p in pieces)
     median_y = ys[len(ys) // 2]
     if median_y < DIVIDER_LINE_Y:
         vision.set_paper_homography(quad, flip_y=True)
         # flip_y 等价于世界坐标 (x, y) -> (x, 297-y), 直接解析镜像即可
         for p in pieces:
-            p['vertices'][:, 1] = A4_HEIGHT - p['vertices'][:, 1]
-            p['vertices'] = p['vertices'][::-1].copy()  # 镜像后保持CCW
-            c = p['vertices'].mean(axis=0)
-            p['centroid'] = (float(c[0]), float(c[1]))
-            gx, gy = p['grip_point']
-            p['grip_point'] = (gx, A4_HEIGHT - gy)
+            p["vertices"][:, 1] = A4_HEIGHT - p["vertices"][:, 1]
+            p["vertices"] = p["vertices"][::-1].copy()  # 镜像后保持CCW
+            c = p["vertices"].mean(axis=0)
+            p["centroid"] = (float(c[0]), float(c[1]))
+            gx, gy = p["grip_point"]
+            p["grip_point"] = (gx, A4_HEIGHT - gy)
         print("[Main] 世界系y轴已翻转 (碎片在上半区)")
     return pieces
 
@@ -125,7 +125,7 @@ def compute_placement(solution):
     矩形长边对齐x轴, 中心 = (ASSEMBLY_TARGET_X, ASSEMBLY_TARGET_Y)
     返回放置变换 (R, t)
     """
-    corners = solution['rect_corners']
+    corners = solution["rect_corners"]
     center = corners.mean(axis=0)
     # 长边方向
     e0 = corners[1] - corners[0]
@@ -146,23 +146,27 @@ def build_tasks(pieces, solution, T_place):
     """生成每片的 抓取/放置/旋转/路径 任务"""
     tasks = []
     for i, p in enumerate(pieces):
-        T_final = compose(T_place, solution['transforms'][i])
-        grip = np.array(p['grip_point'])
+        T_final = compose(T_place, solution["transforms"][i])
+        grip = np.array(p["grip_point"])
         place_pt = apply_transform(T_final, grip.reshape(1, 2))[0]
         rotation = transform_angle(T_final)
         rotation = ((rotation + 180) % 360) - 180
-        target_verts = apply_transform(T_final, p['vertices'])
-        tasks.append({
-            'id': p['id'],
-            'area_mm2': p['area_mm2'],
-            'pick': {'x': float(grip[0]), 'y': float(grip[1])},
-            'place': {'x': float(place_pt[0]), 'y': float(place_pt[1])},
-            'rotation_deg': float(rotation),
-            'path_mm': [[float(grip[0]), float(grip[1])],
-                        [float(place_pt[0]), float(place_pt[1])]],
-            '_target_verts': target_verts,   # 内部可视化用
-            '_pick_angle': p['angle_deg'],
-        })
+        target_verts = apply_transform(T_final, p["vertices"])
+        tasks.append(
+            {
+                "id": p["id"],
+                "area_mm2": p["area_mm2"],
+                "pick": {"x": float(grip[0]), "y": float(grip[1])},
+                "place": {"x": float(place_pt[0]), "y": float(place_pt[1])},
+                "rotation_deg": float(rotation),
+                "path_mm": [
+                    [float(grip[0]), float(grip[1])],
+                    [float(place_pt[0]), float(place_pt[1])],
+                ],
+                "_target_verts": target_verts,  # 内部可视化用
+                "_pick_angle": p["angle_deg"],
+            }
+        )
     return tasks
 
 
@@ -172,16 +176,19 @@ def optimize_order(tasks, start=(ARM_BASE_X, ARM_BASE_Y)):
     ordered = []
     cur = np.array(start, dtype=float)
     while remaining:
-        d = [np.linalg.norm(np.array([t['pick']['x'], t['pick']['y']])
-                            - cur) for t in remaining]
+        d = [
+            np.linalg.norm(np.array([t["pick"]["x"], t["pick"]["y"]]) - cur)
+            for t in remaining
+        ]
         idx = int(np.argmin(d))
         t = remaining.pop(idx)
         ordered.append(t)
-        cur = np.array([t['place']['x'], t['place']['y']])
+        cur = np.array([t["place"]["x"], t["place"]["y"]])
     return ordered
 
 
 # ==================== 可视化 ====================
+
 
 def draw_annotated(frame, quad, pieces, tasks, T_finals, invH):
     """在原图上叠加: 纸框/检测碎片/目标位置/路径箭头"""
@@ -194,28 +201,41 @@ def draw_annotated(frame, quad, pieces, tasks, T_finals, invH):
         return tuple(out.reshape(2).astype(int))
 
     for p in pieces:
-        cnt = p['contour_px']
+        cnt = p["contour_px"]
         cv2.drawContours(img, [cnt], 0, (0, 255, 0), 2)
-        gx, gy = p['grip_point']
+        gx, gy = p["grip_point"]
         cx, cy = w2px((gx, gy))
         cv2.circle(img, (cx, cy), 5, (0, 0, 255), -1)
-        cv2.putText(img, f"#{p['id']}", (cx + 8, cy - 8),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+        cv2.putText(
+            img,
+            f"#{p['id']}",
+            (cx + 8, cy - 8),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (0, 255, 0),
+            2,
+        )
 
     for t in tasks:
         # 目标多边形 (蓝色)
-        tv = t['_target_verts']
+        tv = t["_target_verts"]
         px = [w2px(v) for v in tv]
         cv2.polylines(img, [np.array(px, np.int32)], True, (255, 0, 0), 2)
         # 路径箭头 (红)
-        p0 = w2px((t['pick']['x'], t['pick']['y']))
-        p1 = w2px((t['place']['x'], t['place']['y']))
-        cv2.arrowedLine(img, p0, p1, (0, 0, 255), 2,
-                        tipLength=0.05)
+        p0 = w2px((t["pick"]["x"], t["pick"]["y"]))
+        p1 = w2px((t["place"]["x"], t["place"]["y"]))
+        cv2.arrowedLine(img, p0, p1, (0, 0, 255), 2, tipLength=0.05)
         cv2.circle(img, p1, 5, (255, 0, 255), -1)
         label = f"#{t['id']} r={t['rotation_deg']:.0f}deg"
-        cv2.putText(img, label, (p1[0] + 8, p1[1] + 15),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        cv2.putText(
+            img,
+            label,
+            (p1[0] + 8, p1[1] + 15),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (255, 0, 0),
+            2,
+        )
     return img
 
 
@@ -229,26 +249,47 @@ def draw_topdown(pieces, tasks, rect_corners_world, px_per_mm=3):
         return (int(x * px_per_mm), int((A4_HEIGHT - y) * px_per_mm))
 
     # A4边界 + 分界线
-    cv2.rectangle(img, w2px(0, A4_HEIGHT), w2px(A4_WIDTH, 0),
-                  (0, 0, 0), 2)
-    cv2.line(img, w2px(0, DIVIDER_LINE_Y), w2px(A4_WIDTH, DIVIDER_LINE_Y),
-             (128, 128, 128), 1)
-    cv2.putText(img, "divider", w2px(3, DIVIDER_LINE_Y + 4),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.4, (128, 128, 128), 1)
+    cv2.rectangle(img, w2px(0, A4_HEIGHT), w2px(A4_WIDTH, 0), (0, 0, 0), 2)
+    cv2.line(
+        img, w2px(0, DIVIDER_LINE_Y), w2px(A4_WIDTH, DIVIDER_LINE_Y), (128, 128, 128), 1
+    )
+    cv2.putText(
+        img,
+        "divider",
+        w2px(3, DIVIDER_LINE_Y + 4),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.4,
+        (128, 128, 128),
+        1,
+    )
     # 机械臂基座
     base = w2px(ARM_BASE_X, ARM_BASE_Y)
     cv2.circle(img, base, 8, (0, 0, 0), 2)
-    cv2.putText(img, "ARM", (base[0] - 15, base[1] + 20),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
+    cv2.putText(
+        img,
+        "ARM",
+        (base[0] - 15, base[1] + 20),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.5,
+        (0, 0, 0),
+        2,
+    )
 
     # 当前碎片 (红)
     for p in pieces:
-        pts = np.array([w2px(v[0], v[1]) for v in p['vertices']], np.int32)
+        pts = np.array([w2px(v[0], v[1]) for v in p["vertices"]], np.int32)
         cv2.polylines(img, [pts], True, (0, 0, 255), 2)
-        g = w2px(*p['grip_point'])
+        g = w2px(*p["grip_point"])
         cv2.circle(img, g, 4, (0, 0, 255), -1)
-        cv2.putText(img, f"#{p['id']}", (g[0] + 6, g[1] - 6),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+        cv2.putText(
+            img,
+            f"#{p['id']}",
+            (g[0] + 6, g[1] - 6),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (0, 0, 255),
+            2,
+        )
 
     # 目标矩形 (蓝)
     rc = np.array([w2px(v[0], v[1]) for v in rect_corners_world], np.int32)
@@ -256,18 +297,24 @@ def draw_topdown(pieces, tasks, rect_corners_world, px_per_mm=3):
 
     # 目标碎片 (绿) + 路径箭头
     for order, t in enumerate(tasks):
-        tv = np.array([w2px(v[0], v[1]) for v in t['_target_verts']],
-                      np.int32)
+        tv = np.array([w2px(v[0], v[1]) for v in t["_target_verts"]], np.int32)
         cv2.polylines(img, [tv], True, (0, 180, 0), 2)
-        p0 = w2px(t['pick']['x'], t['pick']['y'])
-        p1 = w2px(t['place']['x'], t['place']['y'])
+        p0 = w2px(t["pick"]["x"], t["pick"]["y"])
+        p1 = w2px(t["place"]["x"], t["place"]["y"])
         cv2.arrowedLine(img, p0, p1, (200, 0, 200), 2, tipLength=0.04)
         mid = ((p0[0] + p1[0]) // 2, (p0[1] + p1[1]) // 2)
-        cv2.putText(img, str(order + 1), mid,
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 0, 200), 2)
-        cv2.putText(img, f"r={t['rotation_deg']:.0f}",
-                    (p1[0] + 5, p1[1] - 5),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 150, 0), 1)
+        cv2.putText(
+            img, str(order + 1), mid, cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 0, 200), 2
+        )
+        cv2.putText(
+            img,
+            f"r={t['rotation_deg']:.0f}",
+            (p1[0] + 5, p1[1] - 5),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.4,
+            (0, 150, 0),
+            1,
+        )
     return img
 
 
@@ -309,17 +356,23 @@ def draw_failure_diagnostic(frame, quad, pieces, message, invH):
 
 # ==================== 主流程 ====================
 
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--image', help='离线图片路径 (不用相机)')
-    parser.add_argument('--frames', type=int, default=5, help='多帧投票数')
-    parser.add_argument('--expected-pieces', type=int, default=0,
-                        help='期望碎片数；0=自动接受检测数量')
-    parser.add_argument('--show', action='store_true', help='显示窗口')
-    parser.add_argument('--homography', default='homography.npy',
-                        help='标定单应文件 (calibrate_camera.py 产物)')
-    parser.add_argument('--no-homography', action='store_true',
-                        help='强制回退到每次检测纸边缘的旧行为')
+    parser.add_argument("--image", help="离线图片路径 (不用相机)")
+    parser.add_argument("--frames", type=int, default=5, help="多帧投票数")
+    parser.add_argument(
+        "--expected-pieces", type=int, default=0, help="期望碎片数；0=自动接受检测数量"
+    )
+    parser.add_argument("--show", action="store_true", help="显示窗口")
+    parser.add_argument(
+        "--homography",
+        default="homography.npy",
+        help="标定单应文件 (calibrate_camera.py 产物)",
+    )
+    parser.add_argument(
+        "--no-homography", action="store_true", help="强制回退到每次检测纸边缘的旧行为"
+    )
     args = parser.parse_args()
 
     os.makedirs(OUT_DIR, exist_ok=True)
@@ -328,14 +381,17 @@ def main():
     # 相机模式默认加载标定单应 (解决纸边缘检测不稳定导致的坐标错误);
     # 离线图片分辨率/机位未知, 仅在显式指定时使用
     fixed_quad = None
-    use_file_H = (not args.no_homography) and \
-        (not args.image or args.homography != 'homography.npy')
+    use_file_H = (not args.no_homography) and (
+        not args.image or args.homography != "homography.npy"
+    )
     if use_file_H and vision.load_calibration(args.homography):
         fixed_quad = vision.quad_from_homography()
         print(f"[Main] 使用标定单应 {args.homography}, 固定A4面板")
     elif not args.image:
-        print("[Main] [警告] 无标定单应, 回退到纸边缘检测 (建议先运行 "
-              "calibrate_camera.py)")
+        print(
+            "[Main] [警告] 无标定单应, 回退到纸边缘检测 (建议先运行 "
+            "calibrate_camera.py)"
+        )
 
     # 1. 多帧检测
     frame, quad, pieces = detect_with_voting(vision, args, fixed_quad)
@@ -350,10 +406,12 @@ def main():
     pieces0 = pieces
     print(f"[Main] 检测到 {len(pieces0)} 片碎片")
     for p in pieces0:
-        print(f"  #{p['id']}: {len(p['vertices'])}顶点 "
-              f"边长={[f'{e:.1f}' for e in p['edge_lengths']]} "
-              f"面积={p['area_mm2']:.0f}mm² 中心=({p['centroid'][0]:.0f},"
-              f"{p['centroid'][1]:.0f})")
+        print(
+            f"  #{p['id']}: {len(p['vertices'])}顶点 "
+            f"边长={[f'{e:.1f}' for e in p['edge_lengths']]} "
+            f"面积={p['area_mm2']:.0f}mm² 中心=({p['centroid'][0]:.0f},"
+            f"{p['centroid'][1]:.0f})"
+        )
 
     if len(pieces0) > MAX_PIECES:
         print(f"[Main] 警告: 碎片数超过题目上限 {MAX_PIECES}")
@@ -367,17 +425,18 @@ def main():
     FLAT_TH_SWEEP = (0.82, 0.78, 0.86, 0.74, 0.90)
     solution = None
     pieces = None
-    best_score = float('inf')
+    best_score = float("inf")
     n_target = args.expected_pieces or len(pieces0)
     if args.expected_pieces and len(pieces0) != args.expected_pieces:
-        print(f"[Main] 警告: 检测到{len(pieces0)}片，"
-              f"期望{args.expected_pieces}片；将继续尝试清晰轮廓模式")
+        print(
+            f"[Main] 警告: 检测到{len(pieces0)}片，"
+            f"期望{args.expected_pieces}片；将继续尝试清晰轮廓模式"
+        )
     prev_sig = None
     for fth in FLAT_TH_SWEEP:
-        pieces_f = vision.detect_pieces_arbitrary(frame, quad,
-                                                  flat_th=fth)
+        pieces_f = vision.detect_pieces_arbitrary(frame, quad, flat_th=fth)
         # 亮光模式下flat_th不起作用, 检测结果与上次相同则跳过
-        sig = [p['vertices'].tobytes() for p in pieces_f]
+        sig = [p["vertices"].tobytes() for p in pieces_f]
         if sig == prev_sig:
             continue
         prev_sig = sig
@@ -385,14 +444,15 @@ def main():
             continue
         if fixed_quad is None:
             pieces_f = fix_paper_orientation(vision, quad, pieces_f)
-        sol = AssemblySolver(verbose=False).solve(
-            [p['vertices'] for p in pieces_f])
-        if sol is not None and sol.get('score', 999) < best_score:
-            best_score = sol.get('score', 999)
+        sol = AssemblySolver(verbose=False).solve([p["vertices"] for p in pieces_f])
+        if sol is not None and sol.get("score", 999) < best_score:
+            best_score = sol.get("score", 999)
             solution, pieces = sol, pieces_f
-            print(f"[Main] flat_th={fth}: 可解 "
-                  f"{sol['rect_size'][0]:.1f}x{sol['rect_size'][1]:.1f}mm "
-                  f"评分{best_score:.2f}")
+            print(
+                f"[Main] flat_th={fth}: 可解 "
+                f"{sol['rect_size'][0]:.1f}x{sol['rect_size'][1]:.1f}mm "
+                f"评分{best_score:.2f}"
+            )
         else:
             print(f"[Main] flat_th={fth}: 无解")
     # 黑底UVC扑克牌碎片: 默认可靠平滑/边缘精化适合噪声场景,
@@ -425,9 +485,13 @@ def main():
                 sharp_score = sol_sharp.get("score", 999)
                 replace = solution is None
                 if solution is not None:
-                    if solution.get("approximate") and not sol_sharp.get("approximate") or (
-                        solution.get("approximate") == sol_sharp.get("approximate")
-                        and sharp_score < best_score
+                    if (
+                        solution.get("approximate")
+                        and not sol_sharp.get("approximate")
+                        or (
+                            solution.get("approximate") == sol_sharp.get("approximate")
+                            and sharp_score < best_score
+                        )
                     ):
                         replace = True
                 if replace:
@@ -444,29 +508,32 @@ def main():
     # 兜底1: 片数与投票不一致的参数组合也试 (投票本身可能错)
     if solution is None:
         for fth in FLAT_TH_SWEEP:
-            pieces_f = vision.detect_pieces_arbitrary(frame, quad,
-                                                      flat_th=fth)
+            pieces_f = vision.detect_pieces_arbitrary(frame, quad, flat_th=fth)
             if len(pieces_f) == n_target or len(pieces_f) < 2:
                 continue
             if fixed_quad is None:
                 pieces_f = fix_paper_orientation(vision, quad, pieces_f)
-            sol = AssemblySolver(verbose=False).solve(
-                [p['vertices'] for p in pieces_f])
-            if sol is not None and sol.get('score', 999) < best_score:
-                best_score = sol.get('score', 999)
+            sol = AssemblySolver(verbose=False).solve([p["vertices"] for p in pieces_f])
+            if sol is not None and sol.get("score", 999) < best_score:
+                best_score = sol.get("score", 999)
                 solution, pieces = sol, pieces_f
-                print(f"[Main] flat_th={fth} (片数{len(pieces_f)}): "
-                      f"可解 {sol['rect_size'][0]:.1f}x"
-                      f"{sol['rect_size'][1]:.1f}mm 评分{best_score:.2f}")
+                print(
+                    f"[Main] flat_th={fth} (片数{len(pieces_f)}): "
+                    f"可解 {sol['rect_size'][0]:.1f}x"
+                    f"{sol['rect_size'][1]:.1f}mm 评分{best_score:.2f}"
+                )
 
     # 兜底2: 宽松模式 (暗光检测误差大: 边容差8mm, 面积余量30%,
     #        允许近似解 — 比赛按相邻顶点距离计分, 近似拼接也能得分)
     if solution is None:
         import rect_assembly as _ra
-        saved = (_ra.RECT_AREA_TOL, _ra.RECT_SIDE_TOL_MM,
-                 _ra.RECT_ANGLE_TOL_DEG)
-        _ra.RECT_AREA_TOL, _ra.RECT_SIDE_TOL_MM, \
-            _ra.RECT_ANGLE_TOL_DEG = 0.12, 12.0, 15.0
+
+        saved = (_ra.RECT_AREA_TOL, _ra.RECT_SIDE_TOL_MM, _ra.RECT_ANGLE_TOL_DEG)
+        _ra.RECT_AREA_TOL, _ra.RECT_SIDE_TOL_MM, _ra.RECT_ANGLE_TOL_DEG = (
+            0.12,
+            12.0,
+            15.0,
+        )
         try:
             pieces_f = vision.detect_pieces_arbitrary(frame, quad)
             if len(pieces_f) == n_target:
@@ -474,17 +541,18 @@ def main():
                     pieces_f = fix_paper_orientation(vision, quad, pieces_f)
                 sv = AssemblySolver(edge_tol=8.0, verbose=False)
                 sv.fit_margin = 0.30
-                sol = sv.solve([p['vertices'] for p in pieces_f])
+                sol = sv.solve([p["vertices"] for p in pieces_f])
                 if sol is not None:
                     solution, pieces = sol, pieces_f
-                    best_score = sol.get('score', 999)
-                    print(f"[Main] 宽松模式: {sol['rect_size'][0]:.1f}x"
-                          f"{sol['rect_size'][1]:.1f}mm "
-                          f"评分{best_score:.2f}"
-                          f"{' (近似)' if sol.get('approximate') else ''}")
+                    best_score = sol.get("score", 999)
+                    print(
+                        f"[Main] 宽松模式: {sol['rect_size'][0]:.1f}x"
+                        f"{sol['rect_size'][1]:.1f}mm "
+                        f"评分{best_score:.2f}"
+                        f"{' (近似)' if sol.get('approximate') else ''}"
+                    )
         finally:
-            (_ra.RECT_AREA_TOL, _ra.RECT_SIDE_TOL_MM,
-             _ra.RECT_ANGLE_TOL_DEG) = saved
+            (_ra.RECT_AREA_TOL, _ra.RECT_SIDE_TOL_MM, _ra.RECT_ANGLE_TOL_DEG) = saved
 
     if solution is None:
         print("[Main] 拼图求解失败")
@@ -501,9 +569,11 @@ def main():
         print(f"[Main] 诊断图已保存: {diag_path}")
         vision.release()
         return 2
-    W, H = solution['rect_size']
-    print(f"[Main] 目标矩形 {W:.1f} x {H:.1f} mm"
-          f"{' [近似解]' if solution.get('approximate') else ''}")
+    W, H = solution["rect_size"]
+    print(
+        f"[Main] 目标矩形 {W:.1f} x {H:.1f} mm"
+        f"{' [近似解]' if solution.get('approximate') else ''}"
+    )
 
     # 4. 放置到下半区 + 生成任务
     T_place = compute_placement(solution)
@@ -512,61 +582,66 @@ def main():
 
     print("[Main] 执行序列 (已按路径优化排序):")
     for k, t in enumerate(tasks):
-        print(f"  {k+1}. 片#{t['id']}: "
-              f"抓({t['pick']['x']:.1f},{t['pick']['y']:.1f}) -> "
-              f"放({t['place']['x']:.1f},{t['place']['y']:.1f}) "
-              f"旋转{t['rotation_deg']:+.1f}°")
+        print(
+            f"  {k + 1}. 片#{t['id']}: "
+            f"抓({t['pick']['x']:.1f},{t['pick']['y']:.1f}) -> "
+            f"放({t['place']['x']:.1f},{t['place']['y']:.1f}) "
+            f"旋转{t['rotation_deg']:+.1f}°"
+        )
 
     # 5. 输出 paths.json
     invH = np.linalg.inv(vision.homography)
-    rect_world = apply_transform(T_place, solution['rect_corners'])
+    rect_world = apply_transform(T_place, solution["rect_corners"])
     result = {
-        'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
-        'approximate': bool(solution.get('approximate', False)),
-        'score': float(best_score),
-        'rect': {
-            'width_mm': float(W), 'height_mm': float(H),
-            'corners_mm': rect_world.tolist(),
-            'center_mm': [ASSEMBLY_TARGET_X, ASSEMBLY_TARGET_Y],
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "approximate": bool(solution.get("approximate", False)),
+        "score": float(best_score),
+        "rect": {
+            "width_mm": float(W),
+            "height_mm": float(H),
+            "corners_mm": rect_world.tolist(),
+            "center_mm": [ASSEMBLY_TARGET_X, ASSEMBLY_TARGET_Y],
         },
-        'pieces': [{
-            'id': t['id'],
-            'area_mm2': t['area_mm2'],
-            'pick': t['pick'],
-            'place': t['place'],
-            'rotation_deg': t['rotation_deg'],
-            'path_mm': t['path_mm'],
-        } for t in tasks],
-        'order': [t['id'] for t in tasks],
-        'arm_base': {'x': ARM_BASE_X, 'y': ARM_BASE_Y},
-        'coordinate': 'world mm, 原点A4角, x短边y长边, 上半区=碎片源区',
-        'detected_count': len(pieces),
-        'expected_count': args.expected_pieces or len(pieces),
+        "pieces": [
+            {
+                "id": t["id"],
+                "area_mm2": t["area_mm2"],
+                "pick": t["pick"],
+                "place": t["place"],
+                "rotation_deg": t["rotation_deg"],
+                "path_mm": t["path_mm"],
+            }
+            for t in tasks
+        ],
+        "order": [t["id"] for t in tasks],
+        "arm_base": {"x": ARM_BASE_X, "y": ARM_BASE_Y},
+        "coordinate": "world mm, 原点A4角, x短边y长边, 上半区=碎片源区",
+        "detected_count": len(pieces),
+        "expected_count": args.expected_pieces or len(pieces),
     }
-    json_path = os.path.join(OUT_DIR, 'paths.json')
-    with open(json_path, 'w', encoding='utf-8') as f:
+    json_path = os.path.join(OUT_DIR, "paths.json")
+    with open(json_path, "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
     print(f"[Main] 路径已保存: {json_path}")
 
     # 6. 可视化
-    T_finals = [compose(T_place, solution['transforms'][i])
-                for i in range(len(pieces))]
+    T_finals = [compose(T_place, solution["transforms"][i]) for i in range(len(pieces))]
     annotated = draw_annotated(frame, quad, pieces, tasks, T_finals, invH)
     topdown = draw_topdown(pieces, tasks, rect_world)
-    p1 = os.path.join(OUT_DIR, 'annotated.jpg')
-    p2 = os.path.join(OUT_DIR, 'plan_topdown.jpg')
+    p1 = os.path.join(OUT_DIR, "annotated.jpg")
+    p2 = os.path.join(OUT_DIR, "plan_topdown.jpg")
     cv2.imwrite(p1, annotated)
     cv2.imwrite(p2, topdown)
     print(f"[Main] 可视化已保存: {p1}, {p2}")
 
     if args.show:
-        cv2.imshow('annotated', annotated)
-        cv2.imshow('topdown', topdown)
+        cv2.imshow("annotated", annotated)
+        cv2.imshow("topdown", topdown)
         cv2.waitKey(0)
 
     vision.release()
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

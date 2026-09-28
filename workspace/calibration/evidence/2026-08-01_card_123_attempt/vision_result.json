@@ -1,0 +1,272 @@
+{
+  "homography": "/opt/epuzzle/workspace/calibration/table_homography_gui_20260731.npy",
+  "flat_th": 0.82,
+  "frame_size": [
+    1280,
+    720
+  ],
+  "pieces": [
+    {
+      "id": 1,
+      "vertices_table_mm": [
+        [
+          162.16664123535156,
+          219.61354064941406
+        ],
+        [
+          187.21817016601562,
+          234.68678283691406
+        ],
+        [
+          163.6776123046875,
+          270.3955993652344
+        ],
+        [
+          139.77027893066406,
+          255.3207244873047
+        ]
+      ],
+      "centroid_table_mm": [
+        163.2081756591797,
+        245.0041618347168
+      ],
+      "area_mm2": 1220.3394437677925,
+      "angle_deg": 123.71152825903702,
+      "grip_point_table_mm": [
+        166.52027893066406,
+        239.61354064941406
+      ]
+    },
+    {
+      "id": 2,
+      "vertices_table_mm": [
+        [
+          126.77255249023438,
+          202.77182006835938
+        ],
+        [
+          137.3391876220703,
+          243.8282928466797
+        ],
+        [
+          109.24097442626953,
+          250.3864288330078
+        ],
+        [
+          99.04000091552734,
+          209.08837890625
+        ]
+      ],
+      "centroid_table_mm": [
+        118.09817886352539,
+        226.51873016357422
+      ],
+      "area_mm2": 1216.3231521091657,
+      "angle_deg": 74.8734241970564,
+      "grip_point_table_mm": [
+        119.04000091552734,
+        230.77182006835938
+      ]
+    },
+    {
+      "id": 0,
+      "vertices_table_mm": [
+        [
+          91.19611358642578,
+          222.60183715820312
+        ],
+        [
+          103.12335205078125,
+          263.9303894042969
+        ],
+        [
+          76.48698425292969,
+          272.9866027832031
+        ],
+        [
+          65.19686889648438,
+          230.94186401367188
+        ]
+      ],
+      "centroid_table_mm": [
+        84.00082969665527,
+        247.61517333984375
+      ],
+      "area_mm2": 1198.0747256008908,
+      "angle_deg": 76.33062661965128,
+      "grip_point_table_mm": [
+        85.19686889648438,
+        252.35183715820312
+      ]
+    },
+    {
+      "id": 3,
+      "vertices_table_mm": [
+        [
+          51.409427642822266,
+          177.2647705078125
+        ],
+        [
+          71.85345458984375,
+          194.7313232421875
+        ],
+        [
+          46.00669479370117,
+          227.71701049804688
+        ],
+        [
+          24.668468475341797,
+          209.74244689941406
+        ],
+        [
+          42.93074035644531,
+          185.23080444335938
+        ]
+      ],
+      "centroid_table_mm": [
+        47.37375717163086,
+        198.93727111816406
+      ],
+      "area_mm2": 1180.9179131074634,
+      "angle_deg": 120.27862819771312,
+      "grip_point_table_mm": [
+        51.9184684753418,
+        196.7647705078125
+      ]
+    }
+  ],
+  "solve": {
+    "status": "SOLVED",
+    "error_code": null,
+    "inferred_target_mm": [
+      56.34876746106289,
+      84.76270212862758
+    ],
+    "placements": [
+      {
+        "piece_id": "piece_00",
+        "order": 0,
+        "source": {
+          "frame": "table_mm",
+          "center_mm": [
+            85.19686889648438,
+            252.35183715820312
+          ],
+          "yaw_deg": 0.0
+        },
+        "target": {
+          "frame": "table_mm",
+          "center_mm": [
+            126.43663845826836,
+            95.10623928702415
+          ],
+          "yaw_deg": 0.0
+        },
+        "geometry_score": 1.746490793080897,
+        "texture_score": null,
+        "texture_status": "disabled",
+        "texture_status_reason": "texture disabled",
+        "plan_confidence": 0.9,
+        "source_timestamp_ns": 3048171242888,
+        "equivalent_yaws_deg": [
+          76.33062661965128
+        ],
+        "solver_version": "legacy_123_assembly"
+      },
+      {
+        "piece_id": "piece_01",
+        "order": 1,
+        "source": {
+          "frame": "table_mm",
+          "center_mm": [
+            166.52027893066406,
+            239.61354064941406
+          ],
+          "yaw_deg": 0.0
+        },
+        "target": {
+          "frame": "table_mm",
+          "center_mm": [
+            96.38722479662832,
+            92.44953063672739
+          ],
+          "yaw_deg": -48.425174474609406
+        },
+        "geometry_score": 1.746490793080897,
+        "texture_score": null,
+        "texture_status": "disabled",
+        "texture_status_reason": "texture disabled",
+        "plan_confidence": 0.9,
+        "source_timestamp_ns": 3048171242888,
+        "equivalent_yaws_deg": [
+          123.71152825903702
+        ],
+        "solver_version": "legacy_123_assembly"
+      },
+      {
+        "piece_id": "piece_02",
+        "order": 2,
+        "source": {
+          "frame": "table_mm",
+          "center_mm": [
+            119.04000091552734,
+            230.77182006835938
+          ],
+          "yaw_deg": 0.0
+        },
+        "target": {
+          "frame": "table_mm",
+          "center_mm": [
+            87.2196416176225,
+            62.03270116609974
+          ],
+          "yaw_deg": -4.2526232333949
+        },
+        "geometry_score": 1.746490793080897,
+        "texture_score": null,
+        "texture_status": "disabled",
+        "texture_status_reason": "texture disabled",
+        "plan_confidence": 0.9,
+        "source_timestamp_ns": 3048171242888,
+        "equivalent_yaws_deg": [
+          74.8734241970564
+        ],
+        "solver_version": "legacy_123_assembly"
+      },
+      {
+        "piece_id": "piece_03",
+        "order": 3,
+        "source": {
+          "frame": "table_mm",
+          "center_mm": [
+            51.9184684753418,
+            196.7647705078125
+          ],
+          "yaw_deg": 0.0
+        },
+        "target": {
+          "frame": "table_mm",
+          "center_mm": [
+            115.50458511387666,
+            55.4445587190711
+          ],
+          "yaw_deg": 123.23312599161756
+        },
+        "geometry_score": 1.746490793080897,
+        "texture_score": null,
+        "texture_status": "disabled",
+        "texture_status_reason": "texture disabled",
+        "plan_confidence": 0.9,
+        "source_timestamp_ns": 3048171242888,
+        "equivalent_yaws_deg": [
+          120.27862819771312
+        ],
+        "solver_version": "legacy_123_assembly"
+      }
+    ],
+    "timing_ms": {
+      "total_ms": 683.565147
+    }
+  },
+  "note": "vision+solve only; no servo goal, no magnet"
+}

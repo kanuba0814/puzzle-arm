@@ -125,7 +125,7 @@ curl -4 -fsSIL https://deb.debian.org/
 
 1. 逐个核对五个 STS3215 型号、ID、电压与供电；
 2. 机械臂串口与 Sipeed MaixCAM 相机 udev 规则已按实机 VID/PID/serial 冻结；更换硬件时必须重新验收，禁止复用旧 identity；
-3. 核对 `/etc/epuzzle/epuzzle.env` 中 GPIO17、低电平触发和 10 秒软件超时配置；
+3. 核对 `/etc/epuzzle/epuzzle.env` 中 GPIO17、低电平触发配置；吸合后由调用方显式断电；
 4. 完成四个标定文件；
 5. 磁铁关闭巡检所需参数必须全部冻结；PICK/PLACE、磁吸带载和 generic/texture 的保留 `UNKNOWN` 继续作为对应功能的 fail-closed 门禁；
 6. 完成 PICK/PLACE 接触高度、吸取释放和带载验收；

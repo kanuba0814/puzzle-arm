@@ -20,7 +20,7 @@ class SpeedTuningContractTest(unittest.TestCase):
             180.0,
             goal_velocity_by_profile={
                 "EMPTY_NORMAL": 250,
-                "EMPTY_SLOW": 150,
+                "EMPTY_SLOW": 180,
                 "HOLDING_SLOW": 100,
             },
             waypoint_min_dwell_s_by_profile={
@@ -31,7 +31,7 @@ class SpeedTuningContractTest(unittest.TestCase):
         )
 
         self.assertEqual(config.goal_velocity_by_profile["EMPTY_NORMAL"], 250)
-        self.assertEqual(config.goal_velocity_by_profile["EMPTY_SLOW"], 150)
+        self.assertEqual(config.goal_velocity_by_profile["EMPTY_SLOW"], 180)
         self.assertEqual(config.goal_velocity_by_profile["HOLDING_SLOW"], 100)
         self.assertEqual(config.waypoint_min_dwell_s_by_profile["HOLDING_SLOW"], 0.30)
 

@@ -91,6 +91,19 @@ class SupervisorGateTest(unittest.TestCase):
             monotonic_ns=self.clock.monotonic_ns,
         )
 
+    def test_contact_approach_is_exactly_vertical_and_thirty_mm(self) -> None:
+        pose = ToolPose("robot_base_mm", (12.0, 34.0, -19.2), -87.5, 12.0)
+        approach = Supervisor._vertical_approach(pose, 30.0)
+        self.assertEqual(approach.position_mm, (12.0, 34.0, 10.8))
+        self.assertEqual(approach.pitch_deg, pose.pitch_deg)
+        self.assertEqual(approach.yaw_deg, pose.yaw_deg)
+
+    def test_contact_approach_rejects_non_positive_distance(self) -> None:
+        pose = ToolPose("robot_base_mm", (12.0, 34.0, -19.2), -87.5, 12.0)
+        with self.assertRaises(SupervisorFailure) as caught:
+            Supervisor._vertical_approach(pose, 0.0)
+        self.assertEqual(caught.exception.code, SupervisorErrorCode.SAFETY_REJECTED)
+
     def test_unknown_pick_place_locks_before_magnet_enable(self) -> None:
         magnet = Magnet()
         supervisor = self._supervisor(magnet=magnet)
@@ -146,6 +159,24 @@ class SupervisorGateTest(unittest.TestCase):
         with self.assertRaises(SupervisorFailure) as mismatch:
             supervisor.validate_plan(PlacementPlanRef("other", 0))
         self.assertEqual(mismatch.exception.code, SupervisorErrorCode.PLAN_STALE)
+
+    def test_bound_grasp_plan_does_not_expire_mid_execution(self) -> None:
+        config = SupervisorConfig(
+            **{
+                **self.config.__dict__,
+                "z_pick_mm": 1.0,
+                "z_place_mm": 1.0,
+                "automatic_pick_place_enabled": True,
+                "transform_is_official": True,
+                "magnet_footprint_clearance_frozen": True,
+            }
+        )
+        supervisor = self._supervisor(config=config, magnet=Magnet())
+        supervisor.scan()
+        supervisor._active_plan = PlacementPlanRef("image-sha", 0)
+        self.clock.now = 60.0
+
+        supervisor._grasp_gates()
 
     def test_sweep_segment_preflight_rejects_before_park_or_servo_action(self) -> None:
         class Motion:

@@ -1,0 +1,2 @@
+# 仅允许 GUI 服务调用固定 helper 和固定确认文件；helper 继续校验 owner、权限、SHA256、清单及 5 分钟有效期。
+epuzzle ALL=(root) NOPASSWD: /usr/local/sbin/epuzzle-clear-motion-lock --confirmation /opt/epuzzle/workspace/runtime/gui/motion_lock_confirmation.json

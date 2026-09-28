@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import math
+import termios
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
@@ -139,7 +140,15 @@ class MotionConfig:
     # 与插件 connect_bumpless 已配置的 Acceleration 配合，由舵机固件生成
     # 加速-匀速-减速的梯形曲线，避免逐点高速冲击。
     goal_velocity_by_profile: dict[str, int] = field(default_factory=dict)
-    # 非终点路点的最小保持时间；防止宽跟随容差在舵机尚未启动时误判到位。
+    # 可选的逐关节速度覆盖；未列出的关节沿用 goal_velocity_by_profile 的基础值。
+    # 仅用于明确验证过的低负载关节，禁止借此绕过位置反馈。
+    goal_velocity_overrides_by_profile: dict[str, dict[str, int]] = field(default_factory=dict)
+    # USB 串口桥掉线后的有界轻量重连（docs/26_USB断连故障研究.md）：
+    # True 时非 PICK/PLACE 相位允许自动重连并重试当前调用；接触段恒为 False。
+    allow_usb_reconnect: bool = True
+    # 中间路点的最小保持时间。官方 LeRobot 是固定频率发送目标；不能因为
+    # 首次读回仍未变化但误差恰好小于 follow_tolerance，就在 1--2 ms 内连续
+    # 冲完全部路点。按 speed_profile 配置节流，终点仍由正式容差验收。
     waypoint_min_dwell_s_by_profile: dict[str, float] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -179,6 +188,22 @@ class MotionConfig:
             if transit <= 0.0:
                 raise ValueError("transit_cartesian_step_mm 必须大于零")
             object.__setattr__(self, "transit_cartesian_step_mm", transit)
+        if not isinstance(self.allow_usb_reconnect, bool):
+            raise ValueError("allow_usb_reconnect 必须是布尔值")
+        for profile, overrides in self.goal_velocity_overrides_by_profile.items():
+            if profile not in _ALLOWED_SPEED_PROFILES:
+                raise ValueError(f"未知 speed_profile={profile}")
+            if not isinstance(overrides, dict):
+                raise ValueError(
+                    f"goal_velocity_overrides_by_profile[{profile}] 必须是对象"
+                )
+            for joint, velocity in overrides.items():
+                if not isinstance(joint, str) or not joint or joint.endswith(".pos"):
+                    raise ValueError(f"速度覆盖关节字段非法: {joint!r}")
+                if isinstance(velocity, bool) or not isinstance(velocity, int):
+                    raise ValueError(f"速度覆盖必须是整数: {joint}")
+                if not 0 <= velocity <= 32767:
+                    raise ValueError(f"速度覆盖超出 0..32767: {joint}")
         for profile, dwell_s in self.waypoint_min_dwell_s_by_profile.items():
             if profile not in _ALLOWED_SPEED_PROFILES:
                 raise ValueError(f"未知 speed_profile={profile}")
@@ -203,6 +228,11 @@ class MotionConfig:
             "transit_cartesian_step_mm": self.transit_cartesian_step_mm,
             "follow_tolerance_deg": self.follow_tolerance_deg,
             "goal_velocity_by_profile": dict(self.goal_velocity_by_profile),
+            "goal_velocity_overrides_by_profile": {
+                profile: dict(overrides)
+                for profile, overrides in self.goal_velocity_overrides_by_profile.items()
+            },
+            "allow_usb_reconnect": self.allow_usb_reconnect,
             "waypoint_min_dwell_s_by_profile": dict(
                 self.waypoint_min_dwell_s_by_profile
             ),
@@ -244,7 +274,11 @@ class JointRobot(Protocol):
     def get_observation(self) -> Mapping[str, object]: ...
 
     def send_action(
-        self, action: dict[str, float], *, goal_velocity: int | None = None
+        self,
+        action: dict[str, float],
+        *,
+        goal_velocity: int | None = None,
+        goal_velocity_by_joint: Mapping[str, int] | None = None,
     ) -> Mapping[str, object]: ...
 
 
@@ -298,6 +332,13 @@ class MotionController:
             self._detail_log.goal(
                 goal.goal_id, goal.as_pose(), goal.phase, goal.speed_profile
             )
+        # USB 掉线自动重连门禁：接触段（PICK/PLACE）恒不允许，其余相位按配置。
+        reconnect_allowed = bool(
+            self._config.allow_usb_reconnect and goal.phase not in {"PICK", "PLACE"}
+        )
+        set_reconnect_allowed = getattr(self._robot, "set_reconnect_allowed", None)
+        if set_reconnect_allowed is not None:
+            set_reconnect_allowed(reconnect_allowed)
         if self._deadline_expired(goal):
             return self._result(
                 goal,
@@ -361,23 +402,33 @@ class MotionController:
                 goal_velocity = self._config.goal_velocity_by_profile.get(
                     goal.speed_profile
                 )
-                # USB 瞬时掉线重试：3s 间隔最多重试 2 次；Goal_Position 写
+                goal_velocity_overrides = self._config.goal_velocity_overrides_by_profile.get(
+                    goal.speed_profile, {}
+                )
+                # USB 瞬时掉线重试：重连包装器最多等待 10s；Goal_Position 写
                 # 幂等，重发同一目标安全。
                 sent: Mapping[str, object] | None = None
                 last_send_error: Exception | None = None
                 for _attempt in range(3):
                     try:
-                        sent = self._robot.send_action(
-                            waypoint.as_mapping(), goal_velocity=goal_velocity
-                        )
+                        if goal_velocity_overrides:
+                            sent = self._robot.send_action(
+                                waypoint.as_mapping(),
+                                goal_velocity=goal_velocity,
+                                goal_velocity_by_joint=goal_velocity_overrides,
+                            )
+                        else:
+                            sent = self._robot.send_action(
+                                waypoint.as_mapping(), goal_velocity=goal_velocity
+                            )
                         break
-                    except (ValueError, RuntimeError, OSError) as send_exc:
+                    except (ValueError, RuntimeError, OSError, termios.error) as send_exc:
                         last_send_error = send_exc
                         self._sleep(3.0)
                 if sent is None:
                     raise RuntimeError(f"舵机目标发送失败: {last_send_error}")
                 sent = JointVector.from_mapping(sent)
-            except (ValueError, RuntimeError, OSError) as exc:
+            except (ValueError, RuntimeError, OSError, termios.error) as exc:
                 return self._result(
                     goal,
                     success=False,
@@ -609,7 +660,7 @@ class MotionController:
                     if key.endswith(".pos")
                 }
                 return JointVector.from_mapping(joint_fields)
-            except (ValueError, RuntimeError, OSError) as exc:
+            except (ValueError, RuntimeError, OSError, termios.error) as exc:
                 last_error = exc
                 self._sleep(3.0)
         assert last_error is not None
@@ -635,13 +686,19 @@ class MotionController:
         started = self._monotonic()
         not_before = started + minimum_dwell
         deadline = started + self._config.waypoint_timeout_s
+        # 重连宽限：每次成功重连给满一个新的收敛窗口（重连期间舵机仍按最后
+        # Goal_Position 运动，需留出剩余收敛时间）。
+        reconnect_epoch_getter = getattr(self._robot, "reconnect_epoch", None)
+        reconnect_epoch = (
+            reconnect_epoch_getter() if reconnect_epoch_getter is not None else 0
+        )
         stable = 0
         latest: JointVector | None = None
         reads = 0
         while self._monotonic() <= deadline:
             try:
                 latest = self._read_joints()
-            except (ValueError, RuntimeError, OSError):
+            except (ValueError, RuntimeError, OSError, termios.error):
                 stable = 0
             else:
                 reads += 1
@@ -664,6 +721,14 @@ class MotionController:
                         return latest
                 else:
                     stable = 0
+            if reconnect_epoch_getter is not None:
+                current_epoch = reconnect_epoch_getter()
+                if current_epoch != reconnect_epoch:
+                    reconnect_epoch = current_epoch
+                    deadline = max(
+                        deadline,
+                        self._monotonic() + self._config.waypoint_timeout_s,
+                    )
             self._sleep(self._config.poll_interval_s)
         return None
 

@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "locked": true,
+  "reason": "fresh card assembly aborted at piece_02 place_safe by USB ttyACM0 EIO; kernel confirms USB disconnect/re-enumeration at 14:54:57; post-read torque all 1 and formal PARK unconfirmed",
+  "incident_time": "2026-08-01T14:55:28+08:00",
+  "evidence_path": "/opt/epuzzle/workspace/logs/motion_detail/motion-20260801-145315.jsonl and /home/epuzzle/assembly_state.json",
+  "clear_requires": [
+    "现场操作者人工支撑机械臂，立即禁止继续运动",
+    "切断舵机电源并确认电磁铁物理断电",
+    "恢复供电/USB 后只读确认 /dev/epuzzle-arm 身份和五轴 ID1-5",
+    "只读确认五轴 Torque_Enable 全 0、当前关节位置和正式 PARK 状态",
+    "确认本次 piece_00/piece_01 已完成、piece_02/piece_03 未完成，检查台面和 assembly_state.json",
+    "由现场操作者明确批准解除运动锁"
+  ]
+}

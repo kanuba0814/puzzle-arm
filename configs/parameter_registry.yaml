@@ -31,28 +31,28 @@ robot:
     /home/epuzzle/.cache/huggingface/lerobot/calibration/robots/
     so101_follower_5d/epuzzle-single-arm.json
   motor_calibration_sha256: >-
-    89ea5079eb9bb35012866d736d0438d419ee57c201e51e11a61530e3e6440ca8
+    36b6211f1f62228350ac8f53f09bce2a04cb448278d5c36eb9231db4dcbe2eb1
   kinematic_calibration_file: >-
     workspace/calibration/arm_kinematics_single_arm_accepted_20260731.json
   kinematic_calibration_sha256: >-
-    c207bae180e187b6c639cc848320195dafce1f468920a0f2eba7f00c621eab38
+    f58910357feeac6fbfb10e8a9ce47256e2458979957b07c3897c6031c998f49a
   kinematic_calibration_status: "accepted"
   runtime_calibration_manifest_file: >-
     workspace/calibration/runtime_calibration_manifest_20260731.json
   runtime_calibration_manifest_sha256: >-
-    a77d82d3f77526b1a6ef4ebd5b4b5028225c13654339f55250795f884f14fbd6
+    f538d62b765c99a27679e71c96d747c04c0a3eab89c4e01391c6ee0b307bb3c7
   park_pose_file: "workspace/calibration/park_pose_single_arm_20260731.json"
   park_pose_sha256: >-
-    1c14bd574e0a1976d8ae5e7b303aecdcd4ec3a08aeefefc2531f82eaf00276d9
+    3376c617a6f94f7093be4ceb9d1724ed3aa198ed189acb9f16c16cb13c23c351
   joint_soft_limits_deg:
     - [-110.0, 110.0]
     - [-100.0, 100.0]
     - [-90.0, 90.0]
     - [-95.0, 95.0]
-    - [-145.0, -20.0]
+    - [-180.0, 180.0]
   joint_soft_limits_source: >-
     same-arm calibrated motor endpoints with conservative margins;
-    J5 additionally limited for cable twist; not a self-collision map
+    J5 uses the confirmed single-turn range; not a self-collision map
 
 camera:
   model: "Sipeed MaixCAM UVC"
@@ -71,13 +71,13 @@ camera:
 frames:
   table_origin_definition: "A4 bottom-left; x right 0-210 mm; y up 0-297 mm"
   table_homography_file: >-
-    workspace/calibration/table_homography_gui_20260731.npy
+    workspace/calibration/table_homography_charuco_recalibrated_20260801.npy
   table_homography_sha256: >-
-    d82e6514f9943d63f34649b1b6b228c1fda5a35be17ae6463d6b029fca9f3694
+    ed3c6e7a16b56cf290d5f098570b0929ef9bcdf36a987386ae9902fb017f8338
   table_homography_image_size_px: [1280, 720]
-  table_homography_rms_mm: 0.257541
-  table_homography_max_mm: 1.029862
-  homography_file: "workspace/calibration/table_homography_gui_20260731.npy"
+  table_homography_rms_mm: 0.18459539798189192
+  table_homography_max_mm: 0.410751900648807
+  homography_file: "workspace/calibration/table_homography_charuco_recalibrated_20260801.npy"
   camera_intrinsics_file: "workspace/calibration/camera_intrinsics.json"
   table_to_robot_file: "workspace/calibration/table_to_robot.json"
   calibration_sheet_to_robot_file: >-
@@ -90,6 +90,7 @@ motion:
   vertical_reference_frame: "calibration_sheet_mm"
   z_safe_mm: 60.0
   z_pregrasp_mm: 20.0
+  vertical_approach_mm: 30.0
   z_pick_mm: "UNKNOWN"
   z_preplace_mm: 20.0
   z_place_mm: "UNKNOWN"
@@ -122,7 +123,6 @@ magnet:
   relay_control_ready_source: >-
     operator-confirmed: relay responds correctly on BCM GPIO17 with active-low
     trigger; this is not an electrical, thermal, pickup, or endurance test
-  software_on_timeout_ms: 10000
   rated_voltage_v: "UNKNOWN"
   coil_resistance_ohm: "UNKNOWN"
   measured_current_a: "UNKNOWN"

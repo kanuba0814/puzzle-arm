@@ -1,0 +1,675 @@
+{
+  "meta": {
+    "plan": "/home/epuzzle/plan_v10/result.json",
+    "log": "/opt/epuzzle/workspace/logs/supervisor/assembly-4pieces.jsonl",
+    "solve_status": "SOLVED",
+    "inferred_rect_mm": [
+      98.30119610848,
+      59.00221540063825
+    ]
+  },
+  "pieces": [
+    {
+      "piece_id": "piece_00",
+      "plan": {
+        "source_table_mm": [
+          37.771419048309326,
+          271.9637908935547
+        ],
+        "source_yaw_table_deg": -34.550153366964864,
+        "target_table_mm": [
+          91.97832427230045,
+          84.50813931836893
+        ],
+        "target_yaw_table_deg": -34.55015336696488,
+        "delta_yaw_deg": 0.0
+      },
+      "executions": [
+        {
+          "index": 1,
+          "pick": {
+            "tcp_table_mm": [
+              97.7,
+              256.3
+            ],
+            "pan_logical": -42.51,
+            "lift_logical": 24.53,
+            "roll_logical": 151.34,
+            "yaw_robot_deg": 169.0
+          },
+          "place": {
+            "tcp_table_mm": [
+              115.0,
+              53.4
+            ],
+            "pan_logical": 25.27,
+            "lift_logical": 24.0,
+            "roll_logical": 83.56,
+            "yaw_robot_deg": 169.0,
+            "error_vs_target_mm": [
+              23.1,
+              -31.1
+            ],
+            "error_dist_mm": 38.7
+          },
+          "actual_rotation_deg": -0.0
+        },
+        {
+          "index": 2,
+          "pick": {
+            "tcp_table_mm": [
+              105.9,
+              258.0
+            ],
+            "pan_logical": -41.36,
+            "lift_logical": 27.08,
+            "roll_logical": 146.07,
+            "yaw_robot_deg": 173.1
+          },
+          "place": {
+            "tcp_table_mm": [
+              116.0,
+              54.5
+            ],
+            "pan_logical": 24.84,
+            "lift_logical": 24.35,
+            "roll_logical": 79.08,
+            "yaw_robot_deg": 173.9,
+            "error_vs_target_mm": [
+              24.1,
+              -30.0
+            ],
+            "error_dist_mm": 38.5
+          },
+          "actual_rotation_deg": 0.8
+        },
+        {
+          "index": 3,
+          "pick": {
+            "tcp_table_mm": [
+              122.7,
+              244.1
+            ],
+            "pan_logical": -35.12,
+            "lift_logical": 29.01,
+            "roll_logical": -116.44,
+            "yaw_robot_deg": 69.4
+          },
+          "place": {
+            "tcp_table_mm": [
+              110.0,
+              33.0
+            ],
+            "pan_logical": 31.34,
+            "lift_logical": 26.81,
+            "roll_logical": 176.4,
+            "yaw_robot_deg": 70.1,
+            "error_vs_target_mm": [
+              18.1,
+              -51.5
+            ],
+            "error_dist_mm": 54.6
+          },
+          "actual_rotation_deg": 0.7
+        },
+        {
+          "index": 4,
+          "pick": {
+            "tcp_table_mm": [
+              110.8,
+              236.1
+            ],
+            "pan_logical": -34.86,
+            "lift_logical": 24.0,
+            "roll_logical": 164.97,
+            "yaw_robot_deg": 147.7
+          },
+          "place": {
+            "tcp_table_mm": [
+              61.9,
+              76.6
+            ],
+            "pan_logical": 28.09,
+            "lift_logical": 9.14,
+            "roll_logical": 101.23,
+            "yaw_robot_deg": 148.5,
+            "error_vs_target_mm": [
+              -30.0,
+              -8.0
+            ],
+            "error_dist_mm": 31.1
+          },
+          "actual_rotation_deg": 0.8
+        },
+        {
+          "index": 5,
+          "pick": {
+            "tcp_table_mm": [
+              162.6,
+              268.6
+            ],
+            "pan_logical": -35.3,
+            "lift_logical": 47.74,
+            "roll_logical": -43.3,
+            "yaw_robot_deg": -3.6
+          },
+          "place": {
+            "tcp_table_mm": [
+              66.2,
+              92.8
+            ],
+            "pan_logical": 20.62,
+            "lift_logical": 8.7,
+            "roll_logical": -99.21,
+            "yaw_robot_deg": -3.6,
+            "error_vs_target_mm": [
+              -25.8,
+              8.2
+            ],
+            "error_dist_mm": 27.1
+          },
+          "actual_rotation_deg": -0.0
+        },
+        {
+          "index": 6,
+          "pick": {
+            "tcp_table_mm": [
+              39.4,
+              272.0
+            ],
+            "pan_logical": -60.97,
+            "lift_logical": 16.97,
+            "roll_logical": 9.1,
+            "yaw_robot_deg": -30.3
+          },
+          "place": {
+            "tcp_table_mm": [
+              92.7,
+              85.2
+            ],
+            "pan_logical": 18.95,
+            "lift_logical": 13.98,
+            "roll_logical": -70.73,
+            "yaw_robot_deg": -30.4,
+            "error_vs_target_mm": [
+              0.7,
+              0.7
+            ],
+            "error_dist_mm": 1.0
+          },
+          "actual_rotation_deg": -0.1
+        }
+      ]
+    },
+    {
+      "piece_id": "piece_01",
+      "plan": {
+        "source_table_mm": [
+          164.1870574951172,
+          263.15399169921875
+        ],
+        "source_yaw_table_deg": 154.96672113960616,
+        "target_table_mm": [
+          136.11349596509987,
+          73.77633977330021
+        ],
+        "target_yaw_table_deg": 139.58890848350717,
+        "delta_yaw_deg": -15.4
+      },
+      "executions": [
+        {
+          "index": 1,
+          "pick": {
+            "tcp_table_mm": [
+              56.7,
+              228.8
+            ],
+            "pan_logical": -44.09,
+            "lift_logical": 12.04,
+            "roll_logical": -174.64,
+            "yaw_robot_deg": 136.6
+          },
+          "place": {
+            "tcp_table_mm": [
+              110.3,
+              95.0
+            ],
+            "pan_logical": 13.32,
+            "lift_logical": 18.29,
+            "roll_logical": -65.27,
+            "yaw_robot_deg": -30.2,
+            "error_vs_target_mm": [
+              -25.9,
+              21.2
+            ],
+            "error_dist_mm": 33.4
+          },
+          "actual_rotation_deg": -166.8
+        },
+        {
+          "index": 2,
+          "pick": {
+            "tcp_table_mm": [
+              56.0,
+              227.2
+            ],
+            "pan_logical": -43.74,
+            "lift_logical": 11.78,
+            "roll_logical": -173.23,
+            "yaw_robot_deg": 134.8
+          },
+          "place": {
+            "tcp_table_mm": [
+              99.7,
+              62.5
+            ],
+            "pan_logical": 25.19,
+            "lift_logical": 18.9,
+            "roll_logical": -163.47,
+            "yaw_robot_deg": 56.1,
+            "error_vs_target_mm": [
+              -36.5,
+              -11.3
+            ],
+            "error_dist_mm": 38.2
+          },
+          "actual_rotation_deg": -78.7
+        },
+        {
+          "index": 3,
+          "pick": {
+            "tcp_table_mm": [
+              151.4,
+              213.5
+            ],
+            "pan_logical": -23.78,
+            "lift_logical": 33.85,
+            "roll_logical": -114.33,
+            "yaw_robot_deg": 56.0
+          },
+          "place": {
+            "tcp_table_mm": [
+              77.3,
+              47.5
+            ],
+            "pan_logical": 34.07,
+            "lift_logical": 15.74,
+            "roll_logical": -10.68,
+            "yaw_robot_deg": -105.5,
+            "error_vs_target_mm": [
+              -58.8,
+              -26.3
+            ],
+            "error_dist_mm": 64.4
+          },
+          "actual_rotation_deg": -161.5
+        },
+        {
+          "index": 4,
+          "pick": {
+            "tcp_table_mm": [
+              36.7,
+              225.0
+            ],
+            "pan_logical": -49.01,
+            "lift_logical": 9.58,
+            "roll_logical": 110.2,
+            "yaw_robot_deg": -143.3
+          },
+          "place": {
+            "tcp_table_mm": [
+              85.8,
+              108.5
+            ],
+            "pan_logical": 11.03,
+            "lift_logical": 11.25,
+            "roll_logical": 113.54,
+            "yaw_robot_deg": 153.3,
+            "error_vs_target_mm": [
+              -50.4,
+              34.7
+            ],
+            "error_dist_mm": 61.2
+          },
+          "actual_rotation_deg": 296.6
+        },
+        {
+          "index": 5,
+          "pick": {
+            "tcp_table_mm": [
+              35.3,
+              218.9
+            ],
+            "pan_logical": -47.25,
+            "lift_logical": 8.79,
+            "roll_logical": 103.16,
+            "yaw_robot_deg": -138.1
+          },
+          "place": {
+            "tcp_table_mm": [
+              89.2,
+              78.7
+            ],
+            "pan_logical": 21.76,
+            "lift_logical": 14.51,
+            "roll_logical": -94.29,
+            "yaw_robot_deg": -9.6,
+            "error_vs_target_mm": [
+              -46.9,
+              4.9
+            ],
+            "error_dist_mm": 47.2
+          },
+          "actual_rotation_deg": 128.4
+        },
+        {
+          "index": 6,
+          "pick": {
+            "tcp_table_mm": [
+              121.5,
+              264.2
+            ],
+            "pan_logical": -40.13,
+            "lift_logical": 32.44,
+            "roll_logical": -26.24,
+            "yaw_robot_deg": -15.8
+          },
+          "place": {
+            "tcp_table_mm": [
+              133.6,
+              76.4
+            ],
+            "pan_logical": 16.48,
+            "lift_logical": 27.16,
+            "roll_logical": 116.44,
+            "yaw_robot_deg": 144.9,
+            "error_vs_target_mm": [
+              -2.5,
+              2.6
+            ],
+            "error_dist_mm": 3.6
+          },
+          "actual_rotation_deg": 160.7
+        },
+        {
+          "index": 7,
+          "pick": {
+            "tcp_table_mm": [
+              161.3,
+              262.3
+            ],
+            "pan_logical": -34.15,
+            "lift_logical": 45.63,
+            "roll_logical": 151.96,
+            "yaw_robot_deg": 160.0
+          }
+        },
+        {
+          "index": 8,
+          "pick": {
+            "tcp_table_mm": [
+              162.0,
+              260.6
+            ],
+            "pan_logical": -33.71,
+            "lift_logical": 45.63,
+            "roll_logical": 152.66,
+            "yaw_robot_deg": 158.9
+          }
+        }
+      ]
+    },
+    {
+      "piece_id": "piece_02",
+      "plan": {
+        "source_table_mm": [
+          36.45974349975586,
+          225.11642456054688
+        ],
+        "source_yaw_table_deg": -80.82951518538025,
+        "target_table_mm": [
+          74.81648755023215,
+          106.29347256533094
+        ],
+        "target_yaw_table_deg": -29.399849484030426,
+        "delta_yaw_deg": 51.4
+      },
+      "executions": [
+        {
+          "index": 1,
+          "pick": {
+            "tcp_table_mm": [
+              101.0,
+              196.9
+            ],
+            "pan_logical": -24.13,
+            "lift_logical": 17.76,
+            "roll_logical": -172.09,
+            "yaw_robot_deg": 114.1
+          },
+          "place": {
+            "tcp_table_mm": [
+              69.5,
+              60.6
+            ],
+            "pan_logical": 31.87,
+            "lift_logical": 12.31,
+            "roll_logical": -164.88,
+            "yaw_robot_deg": 50.9,
+            "error_vs_target_mm": [
+              -5.3,
+              -45.7
+            ],
+            "error_dist_mm": 46.0
+          },
+          "actual_rotation_deg": -63.2
+        },
+        {
+          "index": 2,
+          "pick": {
+            "tcp_table_mm": [
+              156.1,
+              237.1
+            ],
+            "pan_logical": -29.14,
+            "lift_logical": 38.77,
+            "roll_logical": -135.6,
+            "yaw_robot_deg": 82.6
+          },
+          "place": {
+            "tcp_table_mm": [
+              91.4,
+              78.7
+            ],
+            "pan_logical": 21.41,
+            "lift_logical": 14.24,
+            "roll_logical": 98.68,
+            "yaw_robot_deg": 157.8,
+            "error_vs_target_mm": [
+              16.6,
+              -27.6
+            ],
+            "error_dist_mm": 32.2
+          },
+          "actual_rotation_deg": 75.2
+        },
+        {
+          "index": 3,
+          "pick": {
+            "tcp_table_mm": [
+              152.6,
+              227.9
+            ],
+            "pan_logical": -27.3,
+            "lift_logical": 35.78,
+            "roll_logical": 123.03,
+            "yaw_robot_deg": -177.9
+          },
+          "place": {
+            "tcp_table_mm": [
+              71.3,
+              55.4
+            ],
+            "pan_logical": 33.1,
+            "lift_logical": 13.71,
+            "roll_logical": -111.43,
+            "yaw_robot_deg": -3.8,
+            "error_vs_target_mm": [
+              -3.6,
+              -50.8
+            ],
+            "error_dist_mm": 51.0
+          },
+          "actual_rotation_deg": 174.1
+        },
+        {
+          "index": 4,
+          "pick": {
+            "tcp_table_mm": [
+              38.4,
+              226.9
+            ],
+            "pan_logical": -49.1,
+            "lift_logical": 10.11,
+            "roll_logical": 42.95,
+            "yaw_robot_deg": -76.0
+          },
+          "place": {
+            "tcp_table_mm": [
+              76.7,
+              106.5
+            ],
+            "pan_logical": 12.97,
+            "lift_logical": 9.32,
+            "roll_logical": -70.2,
+            "yaw_robot_deg": -24.9,
+            "error_vs_target_mm": [
+              1.9,
+              0.3
+            ],
+            "error_dist_mm": 1.9
+          },
+          "actual_rotation_deg": 51.1
+        }
+      ]
+    },
+    {
+      "piece_id": "piece_03",
+      "plan": {
+        "source_table_mm": [
+          127.14698028564453,
+          233.78079223632812
+        ],
+        "source_yaw_table_deg": -158.70389654677155,
+        "target_table_mm": [
+          66.56089964092251,
+          71.12186641755954
+        ],
+        "target_yaw_table_deg": -32.061232068922095,
+        "delta_yaw_deg": 126.6
+      },
+      "executions": [
+        {
+          "index": 1,
+          "pick": {
+            "tcp_table_mm": [
+              50.5,
+              191.6
+            ],
+            "pan_logical": -30.64,
+            "lift_logical": 8.09,
+            "roll_logical": -173.93,
+            "yaw_robot_deg": 122.4
+          },
+          "place": {
+            "tcp_table_mm": [
+              123.4,
+              51.7
+            ],
+            "pan_logical": 24.48,
+            "lift_logical": 27.08,
+            "roll_logical": -104.92,
+            "yaw_robot_deg": -1.7,
+            "error_vs_target_mm": [
+              56.8,
+              -19.4
+            ],
+            "error_dist_mm": 60.1
+          },
+          "actual_rotation_deg": -124.1
+        },
+        {
+          "index": 2,
+          "pick": {
+            "tcp_table_mm": [
+              83.6,
+              188.0
+            ],
+            "pan_logical": -23.08,
+            "lift_logical": 12.84,
+            "roll_logical": 107.38,
+            "yaw_robot_deg": -166.5
+          },
+          "place": {
+            "tcp_table_mm": [
+              131.9,
+              88.1
+            ],
+            "pan_logical": 13.32,
+            "lift_logical": 24.79,
+            "roll_logical": 96.84,
+            "yaw_robot_deg": 167.7,
+            "error_vs_target_mm": [
+              65.3,
+              16.9
+            ],
+            "error_dist_mm": 67.5
+          },
+          "actual_rotation_deg": 334.2
+        },
+        {
+          "index": 3,
+          "pick": {
+            "tcp_table_mm": [
+              46.3,
+              246.5
+            ],
+            "pan_logical": -52.62,
+            "lift_logical": 13.1,
+            "roll_logical": 54.9,
+            "yaw_robot_deg": -84.4
+          },
+          "place": {
+            "tcp_table_mm": [
+              68.0,
+              71.2
+            ],
+            "pan_logical": 28.62,
+            "lift_logical": 11.16,
+            "roll_logical": -83.21,
+            "yaw_robot_deg": -27.6,
+            "error_vs_target_mm": [
+              1.4,
+              0.1
+            ],
+            "error_dist_mm": 1.4
+          },
+          "actual_rotation_deg": 56.9
+        },
+        {
+          "index": 4,
+          "pick": {
+            "tcp_table_mm": [
+              124.7,
+              233.3
+            ],
+            "pan_logical": -32.04,
+            "lift_logical": 28.04,
+            "roll_logical": 103.43,
+            "yaw_robot_deg": -153.5
+          }
+        }
+      ]
+    }
+  ]
+}

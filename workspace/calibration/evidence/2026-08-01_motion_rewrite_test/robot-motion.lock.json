@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "locked": true,
+  "reason": "assembly-4pieces piece_01 MOVE_PREPLACE convergence timeout; read-only check found mixed Torque_Enable (ID1-3=0, ID4-5=1), formal PARK and magnet physical OFF not confirmed",
+  "incident_time": "2026-08-01T13:58:00+08:00",
+  "evidence_path": "/opt/epuzzle/workspace/logs/supervisor/assembly-4pieces.jsonl and /opt/epuzzle/workspace/logs/motion_detail/motion-20260801-135143.jsonl",
+  "clear_requires": [
+    "现场操作者人工支撑机械臂，禁止在当前混合扭矩状态下继续运动",
+    "切断舵机电源并确认电磁铁物理断电",
+    "恢复供电/USB 后只读确认 /dev/epuzzle-arm 身份和五轴 ID1-5",
+    "只读确认五轴 Torque_Enable 全 0、当前关节位置和正式 PARK 状态；未满足时不得连接运动控制器",
+    "对重新摆放的现场场景重新采集相机帧并重新规划，不能复用旧图像计划",
+    "由现场操作者明确批准解除运动锁"
+  ]
+}

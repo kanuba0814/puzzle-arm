@@ -19,47 +19,20 @@ class FakeOutput:
         self.closed = True
 
 
-class FakeTimer:
-    def __init__(self, interval: float, callback) -> None:
-        self.interval = interval
-        self.callback = callback
-        self.daemon = False
-        self.started = False
-        self.cancelled = False
-
-    def start(self) -> None:
-        self.started = True
-
-    def cancel(self) -> None:
-        self.cancelled = True
-
-    def fire(self) -> None:
-        if not self.cancelled:
-            self.callback()
-
-
 class MagnetControllerTest(unittest.TestCase):
     def setUp(self) -> None:
         self.output = FakeOutput()
-        self.timers: list[FakeTimer] = []
         self.statuses = []
         config = MagnetConfig(
             chip_path="/dev/gpiochip0",
             line_offset=17,
             active_high=False,
-            max_on_seconds=10.0,
         )
         self.controller = MagnetController(
             config,
             output_factory=lambda _: self.output,
-            timer_factory=self._make_timer,
             on_status=self.statuses.append,
         )
-
-    def _make_timer(self, interval: float, callback) -> FakeTimer:
-        timer = FakeTimer(interval, callback)
-        self.timers.append(timer)
-        return timer
 
     def test_connect_requests_output_in_safe_off_state(self) -> None:
         status = self.controller.connect()
@@ -68,37 +41,29 @@ class MagnetControllerTest(unittest.TestCase):
         self.assertEqual(status.reason, "connected_safe_off")
         self.assertEqual(self.output.actions, [False])
 
-    def test_set_enabled_uses_one_boolean_interface_and_arms_timeout(self) -> None:
+    def test_set_enabled_keeps_magnet_enabled_until_explicit_off(self) -> None:
         self.controller.connect()
 
         status = self.controller.set_enabled(True)
 
         self.assertTrue(status.enabled)
-        self.assertEqual(self.output.actions, [False, True])
-        self.assertEqual(self.timers[-1].interval, 10.0)
-        self.assertTrue(self.timers[-1].started)
-        self.assertTrue(self.timers[-1].daemon)
-
-    def test_timeout_automatically_turns_magnet_off(self) -> None:
-        self.controller.connect()
-        self.controller.set_enabled(True)
-
-        self.timers[-1].fire()
-
-        self.assertFalse(self.output.active)
-        self.assertFalse(self.controller.get_status().enabled)
-        self.assertEqual(self.controller.get_status().reason, "timeout")
-
-    def test_repeated_enable_rearms_timeout(self) -> None:
-        self.controller.connect()
-        self.controller.set_enabled(True)
-        first_timer = self.timers[-1]
-
-        self.controller.set_enabled(True)
-
-        self.assertTrue(first_timer.cancelled)
-        self.assertIsNot(self.timers[-1], first_timer)
         self.assertTrue(self.output.active)
+        self.assertEqual(self.controller.get_status().reason, "command_on")
+
+        off_status = self.controller.set_enabled(False)
+
+        self.assertFalse(off_status.enabled)
+        self.assertFalse(self.output.active)
+        self.assertEqual(off_status.reason, "command_off")
+
+    def test_repeated_enable_does_not_schedule_an_automatic_shutdown(self) -> None:
+        self.controller.connect()
+        self.controller.set_enabled(True)
+
+        self.controller.set_enabled(True)
+
+        self.assertTrue(self.output.active)
+        self.assertTrue(self.controller.get_status().enabled)
 
     def test_emergency_off_and_close_are_fail_safe(self) -> None:
         self.controller.connect()

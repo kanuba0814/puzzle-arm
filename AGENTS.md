@@ -61,6 +61,66 @@
 - ACT 必须可通过配置完全关闭。
 - 所有低高度动作必须可超时、可急停、可退回安全高度。
 
+## 树莓派远程调试固定流程
+
+### 主从边界
+
+- 本机 `/home/gxxl/nudec-re101` 是唯一源码真源，只负责编辑、纯计算、静态检查、单元测试、同步、发命令和回收日志；树莓派 `/opt/epuzzle` 是硬件执行副本。
+- **任何可能访问机械臂串口、舵机、相机、GPIO、继电器或电磁铁的代码都只能在树莓派执行。** 本机禁止实例化 `SO101Follower5D`、`InspectionHardwareAdapter`、`MagnetController` 等真实硬件对象，禁止用本机设备节点冒充 Pi；本机只能运行明确不接硬件的 mock、纯算法或 schema 测试。
+- Pi 上只使用规范树 `/opt/epuzzle` 和 `/opt/epuzzle/venv`；禁止在 legacy `/home/epuzzle/puzzle` 运行，禁止把临时代码丢到 `/home/epuzzle/*.py` 后直接控制机械臂。
+- 本机源码始终覆盖 Pi 副本：不得在 Pi 上用 `sed`、编辑器或 heredoc 热修生产代码。若现场必须修复，先改本机、测试，再按原相对路径同步；Pi 生成的日志、标定和实测证据反向拉回仓库后才能引用。
+- 同一时刻只允许一个主会话下发硬件动作。子代理可做只读分析和代码审查，但不得登录 Pi、同步文件、启停服务或执行机械臂/磁铁命令。
+
+### 固定连接与运行环境
+
+每个 Pi 调试会话先在仓库根目录使用以下固定变量；当前现场固定通过局域网 SSH 目标 `epuzzle@192.168.1.110` 连接，不使用 mDNS 或其他地址。
+
+```bash
+cd /home/gxxl/nudec-re101
+PI_TARGET="epuzzle@192.168.1.110"
+PI_KEY="$PWD/deployment/raspberry_pi/output/epuzzle-image-access-ed25519"
+PI_SSH="ssh -i $PI_KEY -o BatchMode=yes -o ConnectTimeout=5 -o ServerAliveInterval=2 -o ServerAliveCountMax=3 -o ControlMaster=auto -o ControlPersist=10m -o ControlPath=/tmp/epuzzle-ssh-%C"
+PI_ROOT="/opt/epuzzle"
+PI_PYTHON="/opt/epuzzle/venv/bin/python"
+PI_PYTHONPATH="/opt/epuzzle/workspace/src/robot_plugin/lerobot_robot_so101_5d:/opt/epuzzle/workspace/src"
+```
+
+- 连通性只用 `$PI_SSH "$PI_TARGET" 'hostname && test -d /opt/epuzzle/workspace'` 检查；机械臂控制、磁铁和相机相关脚本一律通过该 SSH 目标在 Pi 上执行。
+- 所有项目命令都从 `/opt/epuzzle` 执行，因为 Supervisor 的 `workspace/...` 相对路径以这里为基准；不得从 `/opt/epuzzle/workspace` 启动依赖该约定的 CLI。
+- 固定解释器为 `/opt/epuzzle/venv/bin/python`，固定 `PYTHONPATH` 顺序如上，确保工作区五轴插件早于 site-packages。每次部署插件后必须打印并断言实际 `lerobot_robot_so101_5d.__file__` 位于 `/opt/epuzzle/workspace/src/robot_plugin/`。
+
+### 最短迭代闭环
+
+1. **本机修改和无硬件验证**：只改任务范围文件，先运行相关单测、compile/schema 检查。不要为了部署而处理或覆盖仓库中其他未提交改动。
+2. **精确同步**：用户已明确授权部署当前改动后，从仓库根使用 `rsync -azR --itemize-changes` 只同步本次涉及的显式文件，保持相对路径落到 `$PI_TARGET:/opt/epuzzle/`；统一排除 `__pycache__/`、`*.pyc`、`.pytest_cache/`、`.ruff_cache/` 和 `*.egg-info/`。禁止全仓覆盖、禁止 `--delete`、禁止仅凭 `git status` 把他人的 dirty 文件一起推送。
+
+   ```bash
+   # Pi 规范树的上级目录可能由 root 持有；以下参数避免仅因目录属组/时间戳返回 code 23。
+   rsync -azR --no-owner --no-group --omit-dir-times --itemize-changes \
+     --exclude='__pycache__/' --exclude='*.pyc' \
+     --exclude='.pytest_cache/' --exclude='.ruff_cache/' --exclude='*.egg-info/' \
+     -e "$PI_SSH" \
+     workspace/src/<module>/<file>.py workspace/tests/<test_file>.py \
+     "$PI_TARGET:/opt/epuzzle/"
+   ```
+
+3. **Pi 软件验证**：在 Pi 清理本次改动模块的旧 `__pycache__`，从 `/opt/epuzzle` 用固定解释器和 `PYTHONPATH` 跑相关测试、import 路径断言及 `/usr/local/sbin/epuzzle-selfcheck --software-only`。涉及 arm64 wheel、设备库或实际 import 的结论只认 Pi 结果。
+4. **硬件前只读门禁**：检查 `/etc/epuzzle/robot-motion.lock.json`、`/dev/epuzzle-arm`、`/dev/epuzzle-camera`、完整 `epuzzle-selfcheck --json`、`fuser`/运行进程、最近 USB/xHCI 日志以及磁铁安全状态。锁文件存在、设备身份不符、端口被占用或出现 `HC died` 时立即停止；不得自动删锁、杀进程、重绑 USB 或重启 Pi。
+5. **实际动作**：只有用户在当前任务中明确授权具体动作且现场操作者已准备好急停/支撑后才执行。使用一个前台 SSH 命令和 Pi 端 `timeout --signal=INT --kill-after=10s`；需要交互确认的工具加 `ssh -tt`。超时必须包在 Pi 端程序外，不能只在本机包 `timeout ssh ...`，以免 SSH 退出后远端动作仍在运行。真实运动输出不得经 `head`、`tail`、`grep` 截断，也不得后台运行。
+6. **收尾验收**：同时检查命令退出码、结构化日志、最终正式 PARK、五轴 `Torque_Enable`、磁铁 OFF 和事故锁；不能把“SSH 返回 0”写成抓放成功。随后把日志/结果精确拉回对应 `workspace/calibration/evidence/` 或 `docs/experiments/`，记录 Pi 时间、命令、版本/哈希和人工观察。
+
+硬件命令统一采用此形态（具体工具和超时按任务替换）：
+
+```bash
+$PI_SSH -tt "$PI_TARGET" \
+  "cd $PI_ROOT && env PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$PI_PYTHONPATH \
+   timeout --signal=INT --kill-after=10s 300s $PI_PYTHON workspace/tools/<tool>.py <args>"
+```
+
+- SSH 中断或本机超时后，**先假设 Pi 上的进程和机械臂状态未知**；先只读检查进程、运行状态文件、日志、设备节点、PARK/力矩/磁铁状态，禁止盲目重发动作。
+- `usb ... disabled by hub (EMI?), re-enabling` 后约 1 秒重枚举属于端口级事件，只能走已有有界重连和 phase 门禁；`xHCI ... HC died` 属于控制器级事故，严格执行人工支撑、断舵机电源和持久运动锁流程。
+- 为了快，优先复用 SSH ControlMaster、精确 rsync、目标测试和既有规范 CLI；不得以远端热修、跳过门禁、隐藏完整输出或复用 legacy 脚本换速度。
+
 ## 树莓派镜像构建经验
 
 - arm64 wheelhouse 必须在 aarch64 Python 环境解析条件依赖；宿主 x86 pip 可能错误拉取 PyTorch CUDA 包。
@@ -71,14 +131,23 @@
 - NetworkManager 有线维护 profile 不得设置负 `ipv4.dns-priority`；负值会排除其他连接的 DNS，使 Wi-Fi 已有默认路由却无法解析域名。
 - 当前 Raspberry Pi OS 基础镜像的 `/etc/cloud/cloud.cfg` 引用了未安装的 `netplan_nm_patch`；构建时移除该 final module，避免首启 `cloud-init status` 显示 degraded。
 - 长时间运行的 shell 构建脚本启动后不要修改同一脚本；bash 会继续读取后半段，运行中编辑可能造成只在收尾阶段出现的解析错误。先停止或等待构建结束，再修改并从稳定版本重跑。
-- 电磁铁控制已冻结为 `/dev/gpiochip0` 的 BCM GPIO17，经低电平触发继电器控制；3.3 V 高电平默认关闭，单次软件通电上限 10 秒。`config.txt` 使用 `gpio=17=op,dh,pu` 尽早拉高，但官方说明上电到该设置生效仍可能延迟数秒，因此继电器输入外部硬件上拉到 3.3 V 才是最早期默认关闭的基础。线圈电压、电流、温升和实测连续通电能力仍为 `UNKNOWN`。
+- 电磁铁控制已冻结为 `/dev/gpiochip0` 的 BCM GPIO17，经低电平触发继电器控制；3.3 V 高电平默认关闭，软件不再设置 10 秒自动断电，必须由调用方显式关闭。`config.txt` 使用 `gpio=17=op,dh,pu` 尽早拉高，但官方说明上电到该设置生效仍可能延迟数秒，因此继电器输入外部硬件上拉到 3.3 V 才是最早期默认关闭的基础。线圈电压、电流、温升和实测连续通电能力仍为 `UNKNOWN`。
 - pygame/SDL2 `kmsdrm` GUI 从 SSH 启动时必须通过 `openvt` 绑定活动 VT；内层不要使用启用了 `use_pty` 的 `sudo -u`，应由 root 侧 `setpriv` 降权，否则 Python 的标准输入仍指向 SSH pts，可能只显示 DRM 硬件鼠标层。
 - QDTECH MPI700 触摸屏应具有 `ID_INPUT_TOUCHSCREEN=1`；若 udev 规则晚于设备枚举，需对对应 event 节点执行 `udevadm trigger --action=change`。GUI 不依赖 SDL 隐式触摸鼠标合成，应显式把 `FINGER*` 归一化坐标映射到屏幕像素。
 - 当前 SDL 2.32 KMSDRM 在 Pi 5 上表现为主 framebuffer 正常翻页但物理屏全黑，仅硬件光标可见；修改 pygame 软件 Surface 的 alpha 不会修复 SDL 后续生成的 GBM buffer。7 英寸正式 GUI 使用 `SDL_VIDEODRIVER=dummy` 离屏绘图，转 RGB565 后直接写 `/dev/fb0`，并直接读取 QDTECH MPI700 evdev；验收需同时检查 fb0 非黑像素/颜色数和实屏触摸。
 - 7 英寸 GUI 手动页的 `_tab=None` 表示关节/末端页签共享控件；过滤时必须保留 `None`，否则“← 返回”等公共按钮会消失。该语义必须有回归测试。
+- QDTECH MPI700 实屏逻辑分辨率固定为 1024×600；Pi 5 KMS 曾因 EDID 选择 fb0 1024×768，使屏幕布局与 evdev y 轴映射错位。GUI 必须以 1024×600 作为逻辑画布并在 fb0 输出层显式缩放；镜像 kernel cmdline 固定 `video=HDMI-A-2:1024x600@60`，该启动参数变更须重启后只读核验。触摸必须同时支持 `BTN_TOUCH` 与 protocol-B `ABS_MT_TRACKING_ID`，节点未就绪/热拔不得令 GUI 退出。
+- Pi 运行树是精简部署副本，不含源码 `deployment/` 树和某些 `workspace/runtime` 测试 fixture；`/opt/epuzzle/venv` 也不保证安装 `pytest`/`pygame`。GUI 服务和离屏截图须使用 `/usr/bin/python3`，并显式将 venv site-packages 放入 `PYTHONPATH`；Pi 只运行可脱离源码树的 GUI/触摸测试、编译和 software-only 自检，完整部署契约测试只在本机源码树运行。
+- `manual-read-state` 是排障只读通道：断力矩后的重力下垂可能使关节落到冻结软限位外；此时必须仍返回五轴 raw/degree 与 `Torque_Enable`，仅省略不可安全计算的 TCP 并明确警告，严禁借由读取动作修正姿态或使能力矩。
+- Pi 的 `test_supervisor_run_cli.py` 若断言“缺设备 → ROBOT_COMM_TIMEOUT”，必须在子进程环境显式指向临时不存在的 `EPUZZLE_ROBOT_MOTION_LOCK`；现场真实持久锁优先返回 `SUPERVISOR_LOCKED`，不能让设备离线 fixture 假设覆盖该安全门禁。
 - 机械臂 commissioning 的悬空阶段之间不得断力矩；否则关节会因重力下垂，下一阶段的起点即失效。首次使能必须先在断力矩状态把 `Goal_Position` 对齐当前 `Present_Position`，受监控序列结束前先返回有支撑的停放位，再断力矩。
 - 断力矩触点拟合与舵机编码器收敛不能单独保证带力矩时的 TCP 离面间隙；本机 `calibration_sheet_mm` 目标 10 mm 经现场观察过低或碰纸，20 mm 经 10 秒停留确认可作为竞赛 PREGRASP/观察高度。PICK 接触高度必须单独标定。
 - 快速巡航与精确终点使用不同到位门槛：5°/单样本只适合扫点，会使负载下 TCP 提前 10–20 mm 判到位，禁止用于抓放。当前 D 点精确终点实测补偿为径向远离机械臂 3 mm、命令 pitch `-87.5°`，负载后实际 pitch `-90.03°`；推广到全工作区前至少抽查近/中/远点。
+- 2026-08-01 Pi 只读寄存器复核：ID1–5 均为 STS3215、固件 3.10、Torque_Enable 全 0、`Present_Voltage` 原始值 48–49（约 4.8–4.9 V）；当前运行寄存器为 P=24、Acceleration=30。官方 LeRobot `SOFollower.configure()` 使用 P=16 以降低发抖，已将运行时 P 回退为 16；5 V 供电下重力带载能力不足仍是硬件风险，不能用软件保证不下垂，电机铭牌和电源规格必须现场确认。
+- 2026-08-01 运动明细显示：宽跟随门槛下首个 `Present_Position` 读回在约 2 ms 内被接受，导致中间 `Goal_Position` 路点以总线最快速度连发；`Goal_Velocity` 也不应每个路点重复写。轨迹执行必须配置 profile 最小保持时间并将速度寄存器按 profile 缓存。
+- 2026-08-01 实机回归：P=16、Acceleration=30、50 ms 轮询和路点 dwell 下 PARK→HOME 成功；HOME→正式 PARK 末点误差 7.648°，旧实现因使用 8° follow 容差提前放行，已修复为最后 PARK 路点直接使用正式 4° 容差。随后断力矩/重新连接期间 wrist_flex 从约 79.3°下垂到 70.77°，P=16 在 4.8–4.9 V 下无法独立恢复，仍需供电/负载或有支撑的上电流程。经现场操作者明确批准，已用 5 次稳定只读样本将当前姿态登记为新的正式 PARK，并同步 manifest；这不是新的电机/运动学标定。实测记录见 `workspace/calibration/evidence/2026-08-01_motion_rewrite_test/TEST_LOG.json`。
+- 2026-08-01 绿色碎片单片实机抓放：相机新鲜帧偶发 `Corrupt JPEG`/`VISION_MERGED_BLOBS`，已现场检查帧并显式使用已检查快照回放一次；Supervisor 完成 `piece-1 -> (105,100) table_mm` 的完整动作/磁铁时序，最终扭矩全 0、最大 PARK 误差 2.637°、无吸附/落位传感器，现场目视确认仍是验收必需条件。默认 `pick-place` 仍强制刷新相机。
+- 2026-08-01 现场请求将三档速度提高 25%（EMPTY_NORMAL=250、EMPTY_SLOW=150、HOLDING_SLOW=100），并将 PICK/PLACE 调为 6/12 mm；新高度文件已置 `quality.status=pending`、成功率归零，未完成新高度复测前，`pick-place`/`run_assembly_4pieces.py` 必须保持锁定。`competition-card` 一键后端仍未接入，不能把命令存在写成扑克牌完整排列已完成。
 - `MotionGoal.timestamp_ns`、`deadline_ns` 和控制器 deadline 比较必须处于同一 `time.monotonic_ns()` 时钟域；禁止 Supervisor 用 monotonic 生成 deadline、控制器却用 `time.time_ns()` 比较。PARK 途中宽跟随门槛也不得代替最终正式 PARK 容差验收。
 - 相机运行时必须使用冻结的 `/dev/epuzzle-camera` 稳定链接（Sipeed MaixCAM `359f:2120`、serial `c9c28f4513595968`、capture index 0），不得依赖可漂移的数字 index；更换相机必须重新冻结 udev identity。
 - 若 Pi 内核报告 `xHCI host controller not responding` / `HC died` 并使机械臂串口节点消失，异常清理无法再确认断力矩或正式 PARK。禁止自动重绑 USB、重启 Pi 或重试运动；必须先由现场操作者支撑机械臂并切断舵机电源，再恢复 USB，随后先做只读枚举和 PARK 状态检查。
@@ -92,6 +161,7 @@
 - 当前无吸附/释放传感器：`VERIFY_PICK`/`VERIFY_PLACE` 只做提升运动并记 `verify_pick_unsensed`/`verify_place_unsensed`，`success: true` 仅代表运动与磁铁时序完成，不代表碎片真被吸起或放下。抓放成败必须由现场目视确认后才可写入验收记录。
 - 旋转基准 0° 约定（2026-08-01 起）：不测量碎片绝对朝向。`PlacementPlan.source.yaw_deg` 恒为 `0`（相机拍下初始位置一律视为 0°），`target.yaw_deg` 即求解器相对旋转角（拼图只需碎片间相对方向）。删除“质心→最远顶点”几何朝向的理由：对轮廓噪声敏感、接近对称形状时跳变 180°，且电磁吸头点接触下绝对朝向无夹持约束。执行端 `run_assembly_4pieces.py` 的 roll 补偿（碎片旋转 = Δpan + Δroll = Δyaw，模 360）是该约定的唯一消费方；求解器绝对角输出已废弃。
 - 旋转方向标准视角（2026-08-01 统一）：所有水平面旋转角以“俯视 A4 工作台”为准（z 向上、磁吸面朝下），正值 = 俯视逆时针。本机实测硬件方向：`shoulder_pan` 物理角增大 = 俯视逆时针（与 FK 一致）；`wrist_roll` 物理角增大 = 俯视**顺时针**（与 FK 假设相反，位置标定测不出朝向）。因此实际碎片旋转（俯视顺时针为正）= `Δroll_phys − Δpan_phys`，IK 只保证 `Δpan + Δroll = 命令 Δyaw`；执行端命令增量必须取 `Δyaw_cmd = 2*Δpan − Δyaw`（已在 run_assembly_4pieces 实现）。验证/报告工具（verify_rotation2、motion_analysis、report_human）统一比较“实际碎片旋转 vs 目标 −Δyaw”，严禁退回 `Δpan+Δroll` 旧口径（它自洽但无法发现方向错误，v10 实测 4 片方向全错即此原因）。
+- 黑底白片间距只有数像素时，二值掩码 `MORPH_CLOSE` 的 9×9 核会把 4 个独立连通域桥接成 1 块（随后因面积 >5000mm² 被全部拒绝）；黑底分支固定使用 3×3 close，暗光白纸分支才使用 9×9。排障必须用 `live_detect_123.py --frame <已保存帧>` 回放同一输入，不能用新抓帧替代失败样本。
 
 ## 提交前最低检查
 
@@ -127,7 +197,7 @@
 ### 标定工具安全规范（已实施）
 
 - 标定工具 `calibrate_pick_place_heights.py` 全程人工监督，Ctrl+C 随时急停。
-- 单次磁铁通电不超过 10 秒（`MagnetController` 硬件保护）。
+- 电磁铁吸合后必须由标定工具流程或调用方显式释放；`MagnetController` 不再设置自动断电时限。
 - 至少 10 次完整循环测试（可配置），自动生成验收文件。
 - 磁铁安定时间（吸附 2.0s、释放 1.0s）由标定工具实测并写入验收文件，Supervisor 加载后使用。
 
@@ -149,3 +219,11 @@
 3. CLI 执行单片抓放，观察完整 8 状态序列。
 4. 验证急停、异常清理和 PARK 回退路径。
 5. 确认磁铁安定时间是否需要调整（当前 2.0s/1.0s）。
+
+### 2026-08-01 容差 5° 诊断实测
+
+- 将 `run_assembly_4pieces.py` 抓放末点 `joint_tolerance_deg` 从 3° 临时放宽到 5° 后，piece_01/piece_02 完成，证明此前 4.147° 失败确实受 3° 门槛触发；piece_03 的 `place_safe` 随后在 wrist_roll 跨越 -180°/+180° 表示边界时失败，误差从约 40°持续增大到 118°，其余四轴约 1° 内，不能再归因于 3°/5° 容差。该路径存在 wrist_roll 角度连续性/发送方向问题，修复前禁止继续运动。
+- 本次失败后的串口断开清理抛出 `SerialException: device reports readiness to read but returned no data`；只读复核发现 wrist_flex/wrist_roll 的 `Torque_Enable=1` 且未确认正式 PARK，已重新建立持久运动锁。禁止自动回 PARK、重试或清锁，先由现场切断舵机电源并完成人工支撑和只读门禁。
+- 同日扑克重摆后完整重试：视觉/求解成功，piece_00/piece_01 完成；piece_02 的 `place_safe` 阶段收到 `termios.error: (5, Input/output error)`。Pi 内核在同一时刻确认 `usb 3-1: USB disconnect` 后约 1 秒重新枚举 ttyACM0（不是 HC died）；随后只读复核五轴 Torque_Enable 全 1、正式 PARK 未确认，已建立持久运动锁。该次失败属于串口桥断连，不能通过继续放宽收敛容差解决。
+- USB 容错已部署：`ResilientJointRobot` 把 `termios.error` 纳入通信异常，非 PICK/PLACE 阶段重连前等待窗口提升到 10 秒；接触段仍 fail-closed，禁止用自动重连掩盖低位抓放风险。
+- 绿色第一题重试使用新 ChArUco 标定（70 角点，RMS 0.185mm，max 0.411mm）后，piece_00 完成，piece_01 `place_safe` 仍因 wrist_roll 从 -177.316° 跨到 +173.027° 的环绕路径无法收敛（误差约 83–85°）；本次无新的 USB 断连，说明必须先修 wrist_roll 连续角度路径，不能继续靠容差或 USB 等待规避。

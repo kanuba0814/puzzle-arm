@@ -395,7 +395,6 @@ def _magnet_config_from_environment() -> MagnetConfig | None:
         return None
     try:
         line_offset = int(os.environ["EPUZZLE_MAGNET_GPIO_LINE"])
-        max_on_seconds = float(os.environ["EPUZZLE_MAGNET_MAX_ON_SECONDS"])
     except (KeyError, ValueError) as error:
         raise RuntimeError("电磁铁 GPIO17 配置不完整") from error
     active_high = os.environ.get("EPUZZLE_MAGNET_ACTIVE_HIGH")
@@ -405,7 +404,6 @@ def _magnet_config_from_environment() -> MagnetConfig | None:
         chip_path=os.environ.get("EPUZZLE_MAGNET_GPIO_CHIP", "/dev/gpiochip0"),
         line_offset=line_offset,
         active_high=active_high == "1",
-        max_on_seconds=max_on_seconds,
     )
 
 

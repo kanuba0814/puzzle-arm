@@ -68,7 +68,7 @@ PICK/PLACE 功能解锁需要满足：
 
 ### 自动保护
 
-- 磁铁单次通电上限: 10 秒（`MagnetController` 硬件保护）
+- 磁铁吸合后保持到显式释放；异常时由 `emergency_off()` 强制断电
 - 运动全局超时: 120 秒
 - 异常时强制 `emergency_off()` + 回 PARK
 

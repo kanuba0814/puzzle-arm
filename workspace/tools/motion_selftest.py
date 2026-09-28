@@ -4,6 +4,7 @@
 用法（Pi 上，sudo）：
     PYTHONPATH=... /opt/epuzzle/venv/bin/python tools/motion_selftest.py
 """
+
 import json
 import sys
 import time
@@ -18,16 +19,28 @@ from integration.runtime_adapter import InspectionHardwareAdapter  # noqa: E402
 CAL = "/opt/epuzzle/workspace/calibration/arm_kinematics_single_arm_accepted_20260731.json"
 TRANS = "/opt/epuzzle/workspace/calibration/contact_sheet_to_robot_base_20260731.json"
 PARK_POSE = "/opt/epuzzle/workspace/calibration/park_pose_single_arm_20260731.json"
-CALIB_DIR = Path("/home/epuzzle/.cache/huggingface/lerobot/calibration/robots/so101_follower_5d")
+CALIB_DIR = Path(
+    "/home/epuzzle/.cache/huggingface/lerobot/calibration/robots/so101_follower_5d"
+)
 
 mc = MotionConfig(
-    15.0, 10.0, 10.0, 3.0, 1, 0.05, 3.0, -20.0, -30.0, 180.0,
-    transit_cartesian_step_mm=25.0, follow_tolerance_deg=8.0,
-    goal_velocity_by_profile={"EMPTY_NORMAL": 250, "EMPTY_SLOW": 150, "HOLDING_SLOW": 100},
-    waypoint_min_dwell_s_by_profile={
-        "EMPTY_NORMAL": 0.15,
-        "EMPTY_SLOW": 0.20,
-        "HOLDING_SLOW": 0.30,
+    15.0,
+    10.0,
+    10.0,
+    3.0,
+    1,
+    0.02,
+    3.0,
+    -20.0,
+    -30.0,
+    180.0,
+    transit_cartesian_step_mm=25.0,
+    follow_tolerance_deg=8.0,
+    # 与 Supervisor 保持一致：空载/接近/持物分别 +25% 提速。
+    goal_velocity_by_profile={
+        "EMPTY_NORMAL": 250,
+        "EMPTY_SLOW": 180,
+        "HOLDING_SLOW": 100,
     },
 )
 
@@ -74,7 +87,9 @@ def main() -> None:
         print(f"  park_to_home: success={res.success} 耗时={dt:.1f}s")
         if not res.success:
             raise RuntimeError(f"park_to_home 失败: {res.message}")
-        records.append({"tag": "park_to_home", "duration_s": round(dt, 2), "success": res.success})
+        records.append(
+            {"tag": "park_to_home", "duration_s": round(dt, 2), "success": res.success}
+        )
 
         # 保持 1 秒后读回稳定
         time.sleep(1.0)
@@ -89,7 +104,13 @@ def main() -> None:
         print(f"  home_to_park: success={res2.success} 耗时={dt2:.1f}s")
         if not res2.success:
             raise RuntimeError(f"home_to_park 失败: {res2.message}")
-        records.append({"tag": "home_to_park", "duration_s": round(dt2, 2), "success": res2.success})
+        records.append(
+            {
+                "tag": "home_to_park",
+                "duration_s": round(dt2, 2),
+                "success": res2.success,
+            }
+        )
 
         # 验证回到 PARK
         j4 = joint_snapshot("park_verify")
@@ -99,7 +120,7 @@ def main() -> None:
         # 汇总
         total = sum(r.get("duration_s", 0) for r in records if "duration_s" in r)
         print(f"\n=== 完成：总运动耗时 {total:.1f}s ===")
-        print(f"HOME 关节位移: " + ", ".join(f"{k}:{j1[k]-j0[k]:+.1f}°" for k in j0))
+        print(f"HOME 关节位移: " + ", ".join(f"{k}:{j1[k] - j0[k]:+.1f}°" for k in j0))
 
         out = Path("/home/epuzzle/motion_selftest.json")
         out.write_text(json.dumps(records, ensure_ascii=False, indent=2))

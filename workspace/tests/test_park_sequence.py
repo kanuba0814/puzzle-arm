@@ -83,7 +83,7 @@ class ParkSequenceTest(unittest.TestCase):
         result = self._mover(FakeRobot(HOME, lag=5)).home_to_park()
         self.assertFalse(result.success)
         self.assertEqual(result.error_code, ParkMoveErrorCode.PARK_TRANSITION_FAILED)
-        self.assertIn("正式 PARK 容差", result.message)
+        self.assertIn("单步跟随超时", result.message)
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import time
 import uuid
 from collections.abc import Callable, Mapping
@@ -94,7 +95,8 @@ class SupervisorConfig:
     park_tolerance_deg: float
     park_follow_tolerance_deg: float
     max_vision_age_ms: int | None
-    global_timeout_s: float
+    # None 表示不设置比赛级全局截止时间；运动控制器仍保留自身通信/急停门禁。
+    global_timeout_s: float | None
     shadow: bool
     automatic_pick_place_enabled: bool
     precision_radial_compensation_mm: float
@@ -103,6 +105,9 @@ class SupervisorConfig:
     magnet_footprint_clearance_frozen: bool = False
     magnet_on_settle_s: float | None = None
     magnet_off_settle_s: float | None = None
+    # 接触前最后一段固定沿 robot_base_mm 的 +Z 轴垂直下降，避免横向扫过
+    # 已放置碎片；PICK 和 PLACE 共用该保护距离。
+    vertical_approach_mm: float = 30.0
 
 
 @dataclass(frozen=True)
@@ -233,6 +238,10 @@ class Supervisor:
         self._started_at = monotonic()
         self._run_id = uuid.uuid4().hex
         self._batch: VisionBatch | None = None
+        # 视觉新鲜度只在抓放计划绑定前检查；绑定后整段动作必须使用同一
+        # image hash/timestamp，不能因低速安全轨迹超过 max_vision_age_ms
+        # 就在 MAGNET_ON 后半途失效。
+        self._active_plan: PlacementPlanRef | None = None
 
     @property
     def state(self) -> SupervisorState:
@@ -280,6 +289,7 @@ class Supervisor:
             )
         self._validate_batch(batch)
         self._batch = batch
+        self._active_plan = None
         self._event_log.record(
             state=self.state.value,
             event="vision_batch",
@@ -340,7 +350,17 @@ class Supervisor:
             raise SupervisorFailure(
                 SupervisorErrorCode.VISION_STALE, "没有当前视觉批次"
             )
-        self._validate_batch(self._batch)
+        if self._active_plan is None:
+            # 直接从外部切入抓放状态时仍要求当前观察新鲜；正常 grasp_fsm
+            # 会先绑定计划，之后只校验绑定关系，不重复计算视觉年龄。
+            self._validate_batch(self._batch)
+        elif (
+            self._active_plan.source_image_sha256 != self._batch.source_image_sha256
+            or self._active_plan.monotonic_ns != self._batch.monotonic_ns
+        ):
+            raise SupervisorFailure(
+                SupervisorErrorCode.PLAN_STALE, "抓放执行计划与当前视觉批次不一致"
+            )
 
     def grasp_fsm(
         self,
@@ -377,11 +397,18 @@ class Supervisor:
         # calibration_sheet_mm。两者跨坐标系，不得直接比较。高度正确性由
         # 调用方 pose_for(piece, heights.pick_mm) 保证，并由全路径 IK 预检兑现。
 
-        pick_pregrasp = self._at_height(pick_pose, self.config.z_pregrasp_mm)
+        pick_pregrasp = self._vertical_approach(
+            pick_pose, self.config.vertical_approach_mm
+        )
         pick_safe = self._at_height(pick_pose, self.config.z_safe_mm)
-        place_preplace = self._at_height(place_pose, self.config.z_pregrasp_mm)
+        place_preplace = self._vertical_approach(
+            place_pose, self.config.vertical_approach_mm
+        )
         place_safe = self._at_height(place_pose, self.config.z_safe_mm)
 
+        # 入口 validate_plan 已确认视觉新鲜且计划与当前图像绑定；从这里到
+        # finally 完成同一片抓放，不因安全慢速轨迹超过视觉年龄阈值而中断。
+        self._active_plan = plan
         magnet_engaged = False
         try:
             self._transition(SupervisorState.LOCAL_GRASP_ALIGN)
@@ -453,11 +480,28 @@ class Supervisor:
                     piece_id=piece.piece_id,
                     severity="ERROR",
                 )
+            self._active_plan = None
 
     @staticmethod
     def _at_height(pose: ToolPose, height_mm: float) -> ToolPose:
         x, y, _ = pose.position_mm
         return ToolPose(pose.frame, (x, y, height_mm), pose.pitch_deg, pose.yaw_deg)
+
+    @staticmethod
+    def _vertical_approach(pose: ToolPose, distance_mm: float) -> ToolPose:
+        """在接触位正上方构造固定距离的 robot_base_mm 垂直 approach 点。"""
+        if not math.isfinite(distance_mm) or distance_mm <= 0.0:
+            raise SupervisorFailure(
+                SupervisorErrorCode.SAFETY_REJECTED,
+                "vertical_approach_mm 必须是正数",
+            )
+        x, y, z = pose.position_mm
+        return ToolPose(
+            pose.frame,
+            (x, y, z + distance_mm),
+            pose.pitch_deg,
+            pose.yaw_deg,
+        )
 
     def _settle(self, seconds: float | None) -> None:
         if seconds is None:
@@ -485,9 +529,7 @@ class Supervisor:
                 yaw_deg=pose.yaw_deg,
                 phase=phase,
                 speed_profile=speed_profile,
-                deadline_ns=int(
-                    (self._started_at + self.config.global_timeout_s) * 1_000_000_000
-                ),
+                deadline_ns=self._global_deadline_ns(),
             )
         )
         self._event_log.record(
@@ -596,10 +638,7 @@ class Supervisor:
                         yaw_deg=pose.yaw_deg,
                         phase="PREGRASP",
                         speed_profile="EMPTY_NORMAL",
-                        deadline_ns=int(
-                            (self._started_at + self.config.global_timeout_s)
-                            * 1_000_000_000
-                        ),
+                        deadline_ns=self._global_deadline_ns(),
                     )
                 )
                 self._event_log.record(
@@ -652,8 +691,18 @@ class Supervisor:
         )
         raise SupervisorFailure(mapped, message)
 
+    def _global_deadline_ns(self) -> int | None:
+        if self.config.global_timeout_s is None:
+            return None
+        return int(
+            (self._started_at + self.config.global_timeout_s) * 1_000_000_000
+        )
+
     def _ensure_deadline(self) -> None:
-        if self._monotonic() - self._started_at > self.config.global_timeout_s:
+        if (
+            self.config.global_timeout_s is not None
+            and self._monotonic() - self._started_at > self.config.global_timeout_s
+        ):
             self._transition(SupervisorState.RECOVERY)
             raise SupervisorFailure(
                 SupervisorErrorCode.GLOBAL_TIMEOUT, "Supervisor 全局超时"

@@ -153,6 +153,49 @@ class MotionPlanner:
 
     # ==================== 拾取-放置序列 ====================
 
+    # 悬停高度候选: 近基座点在高悬停高度 J2 超限 (ALGORITHM_STACK 第10节),
+    # 按点从高到低取首个 IK 可达高度。z=20 为最低安全值 (碎片厚≤2mm)。
+    APPROACH_Z_CANDIDATES = (APPROACH_Z, 60.0, 50.0, 40.0, 35.0, 30.0, 25.0, 20.0)
+
+    def _reachable_z(self, ax, ay, wrist=-90.0):
+        """返回 (ax, ay) 处首个 IK 可达的悬停高度, 全不可达返回 None。"""
+        from kinematics import inverse_kinematics
+
+        for z in self.APPROACH_Z_CANDIDATES:
+            if inverse_kinematics(ax, ay, z, wrist, 0.0) is not None:
+                return z
+        return None
+
+    def _arc_path_ok(self, x1, y1, z1, x2, y2, z2, lift_z, sample=10):
+        """move_arc 全路径预检: 抬升段+水平段+下降段逐点 IK, 全可达才 True。
+
+        端点 z1/z2 已由 _reachable_z 保证, 但水平段中间点可能比端点
+        更近基座 (实测: lift=35 时水平段中段 J2=82.1° 超限 0.1°)。
+        """
+        from kinematics import inverse_kinematics
+
+        def seg_ok(p1, p2):
+            for i in range(1, sample + 1):
+                a = i / sample
+                point = tuple(p1[j] + (p2[j] - p1[j]) * a for j in range(3))
+                if inverse_kinematics(*point, -90.0, 0.0) is None:
+                    return False
+            return True
+
+        return (
+            seg_ok((x1, y1, z1), (x1, y1, lift_z))
+            and seg_ok((x1, y1, lift_z), (x2, y2, lift_z))
+            and seg_ok((x2, y2, lift_z), (x2, y2, z2))
+        )
+
+    def _release_magnet(self):
+        """失败路径强制释放磁铁 (吸附后任何失败不得带着碎片移动)。"""
+        try:
+            self.arm.open_gripper()
+        except Exception as exc:
+            print(f"[Plan] 磁铁释放失败: {exc}")
+        return False
+
     def pick_and_place(self, pick_pos, pick_angle, place_pos, place_angle):
         """
         完整的拾取-放置动作序列 (电磁铁版: open_gripper=断电释放,
@@ -173,6 +216,32 @@ class MotionPlanner:
         pick_roll = world_angle_to_arm(pick_angle)
         place_roll = world_angle_to_arm(place_angle)
 
+        # 悬停高度按点自适应 (近基座点高悬停 IK 不可达)
+        z_pick = self._reachable_z(pick_x, pick_y)
+        z_place = self._reachable_z(place_x, place_y)
+        if z_pick is None or z_place is None:
+            print(f"[Pick] 拾取/放置点无可达悬停高度: "
+                  f"pick({pick_x:.0f},{pick_y:.0f})={z_pick} "
+                  f"place({place_x:.0f},{place_y:.0f})={z_place}")
+            return False
+        # 抬升高度: 近基座点上方可能是可达空腔 (z=20 可达但 z>20 不可达),
+        # 垂直抬升会穿过不可达带。因此水平段高度从低到高取首个全路径可达值
+        # (碎片厚≤2mm, 20mm 水平净空足够; 到远点后再沿其上方空间升到 z_place)。
+        low_z = min(z_pick, z_place)
+        high_z = max(z_pick, z_place)
+        lift_z = None
+        for z in (low_z + 5.0 * i for i in range(int((high_z - low_z) / 5.0) + 1)):
+            if self._arc_path_ok(
+                pick_x, pick_y, z_pick, place_x, place_y, z_place, float(z)
+            ):
+                lift_z = float(z)
+                break
+        if lift_z is None:
+            print(f"[Pick] 无安全抬升高度 (pick z={z_pick:.0f} place z={z_place:.0f})")
+            return False
+        print(f"[Pick] 悬停高度 pick={z_pick:.0f} place={z_place:.0f} "
+              f"lift={lift_z:.0f} (自适应, 全路径预检)")
+
         print(
             f"[Pick] ({pick_x:.0f},{pick_y:.0f}) -> "
             f"[Place] ({place_x:.0f},{place_y:.0f})"
@@ -183,7 +252,7 @@ class MotionPlanner:
         if self._aborted():
             return False
         if not self.arm.move_to_xyz(
-            pick_x, pick_y, APPROACH_Z, wrist_pitch=-90, gripper_roll=pick_roll
+            pick_x, pick_y, z_pick, wrist_pitch=-90, gripper_roll=pick_roll
         ):
             return False
         self.arm.wait_for_stop()
@@ -198,7 +267,7 @@ class MotionPlanner:
         # Step 3: 下降到碎片
         print("  3. 下降拾取")
         if not self.move_line(
-            pick_x, pick_y, APPROACH_Z, pick_x, pick_y, PICK_Z, steps=10, dt=0.03
+            pick_x, pick_y, z_pick, pick_x, pick_y, PICK_Z, steps=10, dt=0.03
         ):
             return False
 
@@ -212,50 +281,50 @@ class MotionPlanner:
         # Step 5: 抬升
         print("  5. 抬升")
         if not self.move_line(
-            pick_x, pick_y, PICK_Z, pick_x, pick_y, APPROACH_Z, steps=10, dt=0.03
+            pick_x, pick_y, PICK_Z, pick_x, pick_y, z_pick, steps=10, dt=0.03
         ):
-            return False
+            return self._release_magnet()
 
         # Step 6: 弧形移动到放置位置上方
         print("  6. 移动到放置上方")
         if not self.move_arc(
             pick_x,
             pick_y,
-            APPROACH_Z,
+            z_pick,
             place_x,
             place_y,
-            APPROACH_Z,
-            lift_z=APPROACH_Z + 20,
+            z_place,
+            lift_z=lift_z,
         ):
-            return False
+            return self._release_magnet()
 
         # Step 7: 旋转夹爪对齐角度
         if self._aborted():
-            return False
+            return self._release_magnet()
         if not self.arm.move_to_xyz(
-            place_x, place_y, APPROACH_Z, wrist_pitch=-90, gripper_roll=place_roll
+            place_x, place_y, z_place, wrist_pitch=-90, gripper_roll=place_roll
         ):
-            return False
+            return self._release_magnet()
         self.arm.wait_for_stop()
 
         # Step 8: 下降放置
         print("  7. 下降放置")
         if not self.move_line(
-            place_x, place_y, APPROACH_Z, place_x, place_y, PICK_Z, steps=10, dt=0.03
+            place_x, place_y, z_place, place_x, place_y, PICK_Z, steps=10, dt=0.03
         ):
-            return False
+            return self._release_magnet()
 
         # Step 9: 电磁铁断电释放
         print("  8. 电磁铁释放碎片")
         if self._aborted() or not self.arm.open_gripper():
-            return False
+            return self._release_magnet()
         if not self._sleep(0.3):
-            return False
+            return self._release_magnet()
 
         # Step 10: 抬升离开
         print("  9. 抬升离开")
         if not self.move_line(
-            place_x, place_y, PICK_Z, place_x, place_y, APPROACH_Z, steps=10, dt=0.03
+            place_x, place_y, PICK_Z, place_x, place_y, z_place, steps=10, dt=0.03
         ):
             return False
 

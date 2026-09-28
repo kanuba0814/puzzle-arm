@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "locked": true,
+  "reason": "After epuzzle-gui.service restart, read-only bus check found elbow_flex.pos=97.802° outside frozen motion soft limit [-95.000°, 95.000°]; Torque_Enable ID1-5=0 and formal PARK cannot be verified. Motion is locked fail-closed.",
+  "incident_time": "2026-08-01T18:12:50+08:00",
+  "evidence_path": "/opt/epuzzle/workspace/calibration/evidence/2026-08-01_gui_camera_calibration_deployment/post_restart_read_state.json",
+  "clear_requires": [
+    "现场操作者先人工支撑并检查机械臂；禁止从当前姿态直接下发位置运动",
+    "确认电磁铁物理断电，并保持五轴 Torque_Enable 全 0",
+    "在不使能力矩的条件下只读确认 /dev/epuzzle-arm 身份、五轴位置和 Torque_Enable",
+    "由现场操作者确认机械臂已安全复位/支撑后，明确批准后续 PARK 恢复流程",
+    "PARK 已通过位置读回确认且现场操作者明确批准后，才可人工解除运动锁"
+  ]
+}

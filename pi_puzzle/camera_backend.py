@@ -413,6 +413,15 @@ def create_camera_backend(camera_type=None, **kwargs):
         backend = RTSPCameraBackend(**kwargs)
     elif camera_type == 'mjpeg':
         backend = MjpegSnapshotBackend(**kwargs)
+    elif camera_type == 'usb':
+        # MaixCam UVC gadget: 1280x720 仅 MJPG 可达 (YUYV 最高 640x480)
+        # 失败时由下方回退逻辑再尝试默认参数
+        backend = USBCameraBackend(
+            index=MAIXCAM_UVC_INDEX,
+            width=MAIXCAM_UVC_SIZE[0],
+            height=MAIXCAM_UVC_SIZE[1],
+            mjpg=True,
+        )
     else:
         backend = USBCameraBackend(**kwargs)
 

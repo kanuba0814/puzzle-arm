@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "frame_size": [
+    1280,
+    720
+  ],
+  "material": "white",
+  "px_per_mm": 3.0,
+  "homography_file": "workspace/calibration/table_homography_charuco_recalibrated_20260801.npy",
+  "homography_sha256": "30e6fe0bf89ea271d06dc627193495891e6a813f8ebc4aee305ec88dfedd1211",
+  "source_image_sha256": "0cd09c42595c8f21bc8920f1d5d47d8869fa438832c382558888cbbb1ed30372",
+  "status": "REJECTED",
+  "error_code": "VISION_MERGED_BLOBS",
+  "processing_time_ms": 50.560241,
+  "pieces": []
+}

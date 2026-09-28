@@ -21,6 +21,9 @@ export SDL_VIDEODRIVER=dummy
 export SDL_AUDIODRIVER=dummy
 export SDL_TOUCH_MOUSE_EVENTS=0
 export EP_GUI_FRAMEBUFFER="${EP_GUI_FRAMEBUFFER:-/dev/fb0}"
+# MPI700 的交互逻辑画布固定 1024×600；即使 fb0 临时协商为 1024×768，
+# 页面与 evdev 坐标仍保持同一逻辑尺寸，由 RGB565 输出层显式缩放。
+export EP_GUI_LOGICAL_SIZE="${EP_GUI_LOGICAL_SIZE:-1024x600}"
 export EP_GUI_PYTHON="${EP_GUI_PYTHON:-/opt/epuzzle/venv/bin/python}"
 export PYTHONPATH="$PROJECT_DIR/workspace/src/robot_plugin/lerobot_robot_so101_5d:$PROJECT_DIR/workspace/src:/opt/epuzzle/venv/lib/python3.13/site-packages:/usr/lib/python3/dist-packages${PYTHONPATH:+:$PYTHONPATH}"
 

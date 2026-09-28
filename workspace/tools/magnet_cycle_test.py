@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import time
 
 from control import MagnetConfig, MagnetController
@@ -20,10 +21,10 @@ def parse_arguments() -> argparse.Namespace:
 
 
 def validate_arguments(duration: float, phase: float) -> None:
-    if not 0 < duration <= 60:
-        raise ValueError("总测试时间必须在 0 到 60 秒之间")
-    if not 0 < phase <= 10:
-        raise ValueError("单个电平保持时间必须在 0 到 10 秒之间")
+    if not math.isfinite(duration) or not 0 < duration <= 60:
+        raise ValueError("总测试时间必须是 (0, 60] 秒内的有限值")
+    if not math.isfinite(phase) or phase <= 0:
+        raise ValueError("单个电平保持时间必须是大于 0 的有限值")
 
 
 def run_cycle(duration: float, phase: float) -> None:
@@ -33,7 +34,6 @@ def run_cycle(duration: float, phase: float) -> None:
             chip_path="/dev/gpiochip0",
             line_offset=17,
             active_high=False,
-            max_on_seconds=10.0,
         )
     )
     deadline = time.monotonic() + duration

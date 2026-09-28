@@ -34,6 +34,9 @@ class _FakeBumplessBus:
         self.goal_raw: dict[str, int] = {
             str(joint_name): 0 for joint_name in JOINT_NAMES
         }
+        self.torque_raw: dict[str, int] = {
+            str(joint_name): 1 for joint_name in JOINT_NAMES
+        }
 
     def connect(self) -> None:
         self.calls.append(("connect",))
@@ -64,6 +67,11 @@ class _FakeBumplessBus:
                 str(joint_name): int(value)
                 for joint_name, value in self.goal_raw.items()
             }
+        if register == "Torque_Enable":
+            return {
+                str(joint_name): int(value)
+                for joint_name, value in self.torque_raw.items()
+            }
         if normalize:
             return {str(joint_name): 0.0 for joint_name in JOINT_NAMES}
         return {
@@ -74,10 +82,10 @@ class _FakeBumplessBus:
     def sync_write(
         self,
         register: str,
-        values: dict[str, int],
+        values: dict[str, int | float],
         *,
-        normalize: bool,
-        num_retry: int,
+        normalize: bool = True,
+        num_retry: int = 0,
     ) -> None:
         self.calls.append(("sync_write", register, normalize, num_retry))
         self.goal_raw = {
@@ -151,6 +159,64 @@ class SO101Follower5DContractTest(unittest.TestCase):
             [motor.id for motor in self.robot.bus.motors.values()], [1, 2, 3, 4, 5]
         )
         self.assertNotIn("gripper.pos", self.robot.action_features)
+
+    def test_reconnect_lite_never_toggles_torque(self) -> None:
+        fake_bus = _FakeBumplessBus()
+        cast(Any, self.robot).bus = fake_bus
+
+        observation = self.robot.reconnect_lite()
+
+        self.assertEqual(
+            observation,
+            {f"{joint_name}.pos": 0.0 for joint_name in JOINT_NAMES},
+        )
+        self.assertTrue(
+            all(call[0] != "disable_torque" for call in fake_bus.calls),
+            "轻量重连禁止关闭扭矩",
+        )
+        self.assertTrue(
+            all(call[0] != "enable_torque" for call in fake_bus.calls),
+            "轻量重连禁止重新使能扭矩",
+        )
+        self.assertTrue(
+            all(call[0] != "configure_motors" for call in fake_bus.calls),
+            "轻量重连禁止重配电机",
+        )
+        # Goal_Position 必须先对齐 Present_Position（读回校验 <=1 LSB）
+        self.assertEqual(
+            fake_bus.goal_raw,
+            {str(joint_name): 2048 for joint_name in JOINT_NAMES},
+        )
+        torque_reads = [
+            call
+            for call in fake_bus.calls
+            if call[0] == "sync_read" and call[1] == "Torque_Enable"
+        ]
+        self.assertEqual(len(torque_reads), 1, "必须校验扭矩全部开启")
+
+    def test_reconnect_lite_fails_closed_when_torque_off(self) -> None:
+        fake_bus = _FakeBumplessBus()
+        fake_bus.torque_raw = {str(joint_name): 0 for joint_name in JOINT_NAMES}
+        cast(Any, self.robot).bus = fake_bus
+
+        with self.assertRaisesRegex(RuntimeError, "扭矩未全部开启"):
+            self.robot.reconnect_lite()
+
+    def test_send_action_caches_goal_velocity_between_waypoints(self) -> None:
+        fake_bus = _FakeBumplessBus()
+        fake_bus.is_connected = True
+        cast(Any, self.robot).bus = fake_bus
+        action: dict[str, float] = dict.fromkeys(EXPECTED_FEATURES, 0.0)
+
+        self.robot.send_action(action, goal_velocity=80)
+        self.robot.send_action(action, goal_velocity=80)
+
+        velocity_writes = [
+            call
+            for call in fake_bus.calls
+            if call[0] == "sync_write" and call[1] == "Goal_Velocity"
+        ]
+        self.assertEqual(len(velocity_writes), 1)
 
     def test_send_action_rejects_six_axis_legacy_field_before_bus_access(self) -> None:
         action: dict[str, float] = dict.fromkeys(EXPECTED_FEATURES, 0.0)

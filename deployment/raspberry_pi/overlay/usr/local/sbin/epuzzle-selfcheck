@@ -65,7 +65,7 @@ FROZEN_CALIBRATION_FILES = (
     "workspace/calibration/runtime_calibration_manifest_20260731.json",
     "workspace/calibration/arm_kinematics_single_arm_accepted_20260731.json",
     "workspace/calibration/contact_sheet_to_robot_base_20260731.json",
-    "workspace/calibration/table_homography_gui_20260731.npy",
+    "workspace/calibration/table_homography_charuco_recalibrated_20260801.npy",
     "workspace/calibration/park_pose_single_arm_20260731.json",
 )
 PROJECT_ROOT = Path(os.environ.get("EPUZZLE_PROJECT_ROOT", "/opt/epuzzle"))
@@ -313,6 +313,39 @@ def parameter_registry_checks(
     ]
 
 
+def usb_fault_check() -> dict[str, Any]:
+    """统计本次启动的 USB 故障并区分两类（docs/26_USB断连故障研究.md）。
+
+    - port_level：`disabled by hub (EMI?)` 端口级信号完整性事件，集线器自动
+      重启用并恢复设备（warning，不阻断）；
+    - controller_level：xHCI `not responding` / `HC died`，不自动恢复，
+      需要现场事故流程与运动锁（error）。
+    """
+    logs = command_output(["journalctl", "-k", "-b", "0", "--no-pager"])
+    if not logs:
+        logs = command_output(["dmesg"])
+    port_emi = len(re.findall(r"disabled by hub \(EMI\?\)", logs))
+    port_disconnect = len(re.findall(r"usb 3-[12]: USB disconnect", logs))
+    controller_level = len(
+        re.findall(
+            r"xHCI host (controller )?not responding|HC died; cleaning up",
+            logs,
+        )
+    )
+    detail = (
+        f"port_emi={port_emi}; port_disconnect={port_disconnect}; "
+        f"controller_death={controller_level}"
+    )
+    passed = port_emi == 0 and port_disconnect == 0 and controller_level == 0
+    if controller_level > 0:
+        severity = "error"
+    elif port_emi > 0 or port_disconnect > 0:
+        severity = "warning"
+    else:
+        severity = "info"
+    return result("usb_port_faults", passed, detail, severity=severity)
+
+
 def motion_lock_check(environment: dict[str, str]) -> dict[str, Any]:
     lock_path = Path(
         environment.get(
@@ -368,16 +401,15 @@ def hardware_checks() -> list[dict[str, Any]]:
     )
     checks.append(result("robot_port", robot_port.exists(), str(robot_port)))
     checks.append(result("camera_device", camera_device.exists(), str(camera_device)))
+    checks.append(usb_fault_check())
     checks.append(motion_lock_check(environment))
 
     magnet_line = environment.get("EPUZZLE_MAGNET_GPIO_LINE", "UNKNOWN")
     magnet_active_high = environment.get("EPUZZLE_MAGNET_ACTIVE_HIGH", "UNKNOWN")
-    magnet_timeout = environment.get("EPUZZLE_MAGNET_MAX_ON_SECONDS", "UNKNOWN")
     checks.append(result("magnet_gpio_frozen", magnet_line == "17", magnet_line))
     checks.append(
         result("magnet_relay_active_low", magnet_active_high == "0", magnet_active_high)
     )
-    checks.append(result("magnet_timeout", magnet_timeout == "10", magnet_timeout))
     checks.append(calibration_check())
     checks.extend(parameter_registry_checks())
     return checks

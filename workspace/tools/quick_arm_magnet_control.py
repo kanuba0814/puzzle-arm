@@ -15,7 +15,7 @@
 5. 退出时先断电磁铁，再回正式 PARK，最后断力矩。
 
 安全约束：
-- 电磁铁单次通电由 MagnetController 限制为 10 秒。
+- 电磁铁通电后保持，必须由操作者显式输入 off/0 或退出；异常和急停路径会断电。
 - 抬臂期间不断力矩；整个受监控序列由本进程连续持有。
 - 若不在 PARK，本工具不猜测姿态，直接拒绝并提示现场处理。
 - 使用 --magnet-only 可跳过一切运动，只做电磁铁通断测试。
@@ -57,7 +57,7 @@ DEFAULT_MOTION_LOCK = Path("/etc/epuzzle/robot-motion.lock.json")
 
 HELP_TEXT = """\
 电磁铁命令（输入后回车）：
-  on  / 1   通电吸合（最多 10 秒后自动断电）
+  on  / 1   通电吸合（保持至 off/0、退出或急停）
   off / 0   断电释放
   st  / s   查询当前状态
   h         显示本帮助
@@ -130,7 +130,6 @@ def create_magnet() -> MagnetController:
             chip_path="/dev/gpiochip0",
             line_offset=17,
             active_high=False,
-            max_on_seconds=10.0,
         )
     )
     magnet.connect()
@@ -182,7 +181,7 @@ def control_loop(magnet: MagnetController) -> None:
             return
         if line in ("on", "1"):
             status = magnet.set_enabled(True)
-            print(f"ON  已通电，reason={status.reason}，10 秒后自动断电")
+            print(f"ON  已通电，reason={status.reason}，保持中；请用 off/0 断电")
         elif line in ("off", "0"):
             status = magnet.set_enabled(False)
             print(f"OFF 已断电，reason={status.reason}")

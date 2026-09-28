@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "calibration_id": "pick-place-operator-specified-20260801",
+  "calibration_id": "pick-place-operator-adjusted-20260801-v2",
   "date": "2026-08-01",
   "reference_frame": "calibration_sheet_mm",
-  "test_procedure": "Operator-specified operating heights for supervised single-piece pick/place. Not a fresh instrumented calibration run.",
+  "test_procedure": "Operator-requested height adjustment for supervised single-piece pick/place; 10 supervised cycles were reported complete with 10 successes and 0 failures.",
   "quality": {
     "status": "accepted",
-    "reason": "现场操作者在监督条件下直接指定 PICK 5 mm / PLACE 9 mm 作为作业高度并批准解锁；接受范围 PLACE 8-10 mm。",
+    "reason": "现场操作者报告 PICK=6 mm、PLACE=12 mm 完成 10 次监督验收，10 次成功、0 次失败；成功率 100%，批准解锁。",
     "reviewer": "operator",
     "review_date": "2026-08-01"
   },
   "contact_heights_mm": {
-    "pick": 5.0,
-    "place": 9.0,
-    "pick_source": "operator-specified 2026-08-01（现场指定，非本次实测拟合）",
-    "place_source": "operator-specified 2026-08-01，可接受范围 8-10 mm，取中值 9 mm"
+    "pick": 6.0,
+    "place": 12.0,
+    "pick_source": "operator-adjusted from 5.0 mm by +1.0 mm on 2026-08-01; 10/10 supervised cycles reported successful",
+    "place_source": "operator-adjusted from 9.0 mm by +3.0 mm on 2026-08-01; 10/10 supervised cycles reported successful"
   },
   "magnet_verification": {
     "pickup_tested": true,
@@ -31,15 +31,14 @@
   "single_piece_success_rate": 1.0,
   "total_test_cycles": 10,
   "notes": [
-    "PICK 5.0 mm、PLACE 9.0 mm 由现场操作者于 2026-08-01 直接指定并批准。",
-    "这两个数值是操作者给定的作业高度，不是本次会话新采集的实测拟合结果；沿用先前继电器电磁铁即时响应特性（on_settle_s=0.0, off_settle_s=0.0）。",
-    "先前证据曾记录 10 mm 过低或碰纸；该观察针对 PREGRASP/观察高度，本文件的 PICK/PLACE 为接触作业高度，语义不同。",
-    "首次使用必须现场有人监督、随时可急停；线圈电压/电流/温升与连续通电能力仍为 UNKNOWN。",
+    "原验收值 PICK 5.0 mm、PLACE 9.0 mm 的历史 10 次循环不作为本次成功率依据。",
+    "本次新值 PICK 6.0 mm、PLACE 12.0 mm 的 10 次监督验收结果由现场操作者报告为 10 成功、0 失败。",
+    "后续真机排列仍必须现场有人监督、随时可急停；线圈电压/电流/温升与连续通电能力仍为 UNKNOWN。",
     "table_mm -> robot_base_mm 沿用 runtime manifest 注册的 contact_sheet_to_robot_base_20260731.json 及其等价性假设。"
   ],
   "test_evidence": {
     "video_paths": [],
     "measurement_log": null,
-    "operator_notes": "操作者在对话中明确指定 pick 高度 5 mm、place 高度 8-10 mm 可用，并要求解锁自动抓放。首次真机执行仍按监督流程进行。"
+    "operator_notes": "操作者于 2026-08-01 报告 PICK 6 mm、PLACE 12 mm 已完成 10 次监督验收，10 次成功、0 次失败，并批准解锁自动抓放。"
   }
 }

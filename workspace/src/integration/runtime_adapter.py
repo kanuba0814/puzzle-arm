@@ -35,7 +35,10 @@ HOME_DEG = {
     "wrist_flex": 84.659341,
     "wrist_roll": -82.505495,
 }
-BUMPLESS_P_COEFFICIENT = 24
+# 官方 LeRobot SOFollower.configure() 使用 P=16，并明确说明默认 P=32
+# 容易发抖；P=24 是本项目此前的现场覆盖值，已回退为官方值。
+BUMPLESS_P_COEFFICIENT = 16
+# 保留较保守的加速度，避免 5V 供电和重力负载下的瞬时冲击。
 BUMPLESS_ACCELERATION = 30
 SAFE_HEIGHT_MM = 60.0
 PREGRASP_HEIGHT_MM = 20.0
@@ -160,34 +163,48 @@ class InspectionHardwareAdapter:
         ) as error:
             raise RuntimeError(f"无法加载正式 PARK 标定 {path}: {error}") from error
 
-    def connect(self) -> None:
-        if self.robot is not None:
-            raise RuntimeError("机械臂已经连接")
-        try:
-            from lerobot_robot_so101_5d import SO101Follower5D, SO101Follower5DConfig
+    def _create_robot(self, *, lite: bool) -> Any:
+        from lerobot_robot_so101_5d import SO101Follower5D, SO101Follower5DConfig
 
-            robot = SO101Follower5D(
-                SO101Follower5DConfig(
-                    port=str(self._port),
-                    id="epuzzle-single-arm",
-                    calibration_dir=self._lerobot_calibration_dir,
-                    disable_torque_on_disconnect=True,
-                    use_degrees=True,
-                )
+        robot = SO101Follower5D(
+            SO101Follower5DConfig(
+                port=str(self._port),
+                id="epuzzle-single-arm",
+                calibration_dir=self._lerobot_calibration_dir,
+                disable_torque_on_disconnect=True,
+                use_degrees=True,
             )
+        )
+        if lite:
+            # 掉线重连：不断力矩、不重配电机（docs/26_USB断连故障研究.md）。
+            robot.reconnect_lite()
+        else:
             robot.connect_bumpless(
                 p_coefficient=BUMPLESS_P_COEFFICIENT,
                 acceleration=BUMPLESS_ACCELERATION,
             )
-            self.robot = robot
-            self.motion = MotionController(
+        return robot
+
+    def connect(self) -> None:
+        if self.robot is not None:
+            raise RuntimeError("机械臂已经连接")
+        try:
+            from control.usb_resilience import ResilientJointRobot
+
+            robot = self._create_robot(lite=False)
+            self.robot = ResilientJointRobot(
                 robot,
+                lambda: self._create_robot(lite=True),
+                max_attempts=2,
+            )
+            self.motion = MotionController(
+                self.robot,
                 self.kinematics,
                 self._motion_config,
                 detail_log=self.motion_detail_log,
             )
             self.park_mover = JointSpaceParkMover(
-                robot,
+                self.robot,
                 park_deg=self._park_deg,
                 home_deg=HOME_DEG,
                 park_tolerance_deg=4.0,
@@ -239,6 +256,10 @@ class InspectionHardwareAdapter:
     def attempt_park(self) -> tuple[bool, str]:
         if self.park_mover is None:
             return False, "机械臂未连接，无法回 PARK"
+        # 清理路径：允许有界轻量重连，使 USB 掉线后仍能完成 PARK 与断力矩验收。
+        set_reconnect_allowed = getattr(self.robot, "set_reconnect_allowed", None)
+        if set_reconnect_allowed is not None:
+            set_reconnect_allowed(True)
         if self.park_mover.is_at_park():
             return True, "已在正式 PARK"
         result = self.park_mover.home_to_park()

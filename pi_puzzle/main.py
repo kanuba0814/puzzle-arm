@@ -25,6 +25,8 @@ from config import (
     LED_PIN,
     SERVO_BAUDRATE,
     SERVO_PORT,
+    TARGET_RECT_MAX,
+    TARGET_RECT_MIN,
     TASK1_RECT_TOL_MM,
     TASK1_TARGET_RECT_MM,
 )
@@ -340,13 +342,22 @@ class PuzzleRobot:
             if sol is None:
                 self._log(f"  [{label}] 无解")
                 continue
-            # task1: 目标矩形固定为自备 10×6cm
+            # task1: 目标矩形固定为自备 10×6cm; task2: 现场题目标矩形必须在
+            # 9×5~12×9cm 范围 (题面硬约束, 宽高可交换)
             if task_mode == "task1" and not self._matches_task1_rect(sol):
                 w, h = sol['rect_size']
                 self._log(
                     f"  [{label}] 反推 {w:.1f}x{h:.1f}mm 不符合自备目标矩形"
                     f" {TASK1_TARGET_RECT_MM[0]:.0f}x{TASK1_TARGET_RECT_MM[1]:.0f}mm"
                     f"(容差{TASK1_RECT_TOL_MM:.0f}mm)，跳过"
+                )
+                continue
+            if task_mode == "task2" and not self._matches_onsite_rect(sol):
+                w, h = sol['rect_size']
+                self._log(
+                    f"  [{label}] 反推 {w:.1f}x{h:.1f}mm 不在现场题目标范围"
+                    f" {TARGET_RECT_MIN[0]:.0f}x{TARGET_RECT_MIN[1]:.0f}"
+                    f"~{TARGET_RECT_MAX[0]:.0f}x{TARGET_RECT_MAX[1]:.0f}mm，跳过"
                 )
                 continue
             score = sol.get('score', 999)
@@ -380,6 +391,8 @@ class PuzzleRobot:
                     if sol is None:
                         continue
                     if task_mode == "task1" and not self._matches_task1_rect(sol):
+                        continue
+                    if task_mode == "task2" and not self._matches_onsite_rect(sol):
                         continue
                     score = sol.get('score', 999)
                     if best is None or score < best[0]:
@@ -472,6 +485,19 @@ class PuzzleRobot:
         tw, th = TASK1_TARGET_RECT_MM
         return abs(w - tw) <= TASK1_RECT_TOL_MM and abs(h - th) <= TASK1_RECT_TOL_MM
 
+    @staticmethod
+    def _matches_onsite_rect(solution, tol_mm=10.0):
+        """现场题目标矩形范围校验: 9×5~12×9cm, 宽高可交换 (题面硬约束)。
+
+        tol_mm 容忍检测/求解误差 (123 实拍 ±3-5mm)。
+        """
+        w, h = solution["rect_size"]
+        (lo_w, lo_h), (hi_w, hi_h) = TARGET_RECT_MIN, TARGET_RECT_MAX
+        return (
+            (lo_w - tol_mm <= w <= hi_w + tol_mm and lo_h - tol_mm <= h <= hi_h + tol_mm)
+            or (lo_h - tol_mm <= w <= hi_h + tol_mm and lo_w - tol_mm <= h <= hi_w + tol_mm)
+        )
+
     def _execute(self):
         """执行拾取-放置"""
         self.state = "EXECUTE"
@@ -506,6 +532,12 @@ class PuzzleRobot:
                 self.placed_count += 1
             else:
                 failed += 1
+                # 双保险: 任务失败后强制确认磁铁断电 (pick_and_place 内部
+                # 已释放, 这里兜底防止任何遗漏路径)
+                try:
+                    self.planner.arm.open_gripper()
+                except Exception:
+                    pass
                 self._log(f"  任务{i + 1}失败, 继续下一个", "WARN")
             self._progress(
                 "EXECUTING",

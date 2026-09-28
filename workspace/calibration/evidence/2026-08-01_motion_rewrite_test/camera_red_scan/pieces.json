@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "frame_size": [
+    1280,
+    720
+  ],
+  "homography_file": "workspace/calibration/table_homography_gui_20260731.npy",
+  "pieces": []
+}

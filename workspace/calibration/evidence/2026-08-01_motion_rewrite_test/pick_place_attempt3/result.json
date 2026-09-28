@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "command": "pick-place",
+  "result": "PASS",
+  "magnet_enabled": false,
+  "message": "piece-1 抓放完成（无落位传感确认）",
+  "started_at_ns": 61768821740891,
+  "duration_s": 54.579,
+  "events": [
+    {
+      "error_code": "NONE",
+      "route": [
+        "piece-1"
+      ],
+      "final_state": "VERIFY_PLACE",
+      "events_path": "workspace/logs/supervisor/pick-place.jsonl"
+    }
+  ],
+  "success": true,
+  "error_code": "NONE",
+  "mode": "pick-place",
+  "route": [
+    "piece-1"
+  ],
+  "duration_ms": 54579,
+  "final_state": "VERIFY_PLACE",
+  "events_path": "workspace/logs/supervisor/pick-place.jsonl"
+}

@@ -142,7 +142,24 @@ def main() -> int:
     controller = MotionController.from_calibration_file(
         robot,
         CALIBRATION_PATH,
-        MotionConfig(10.0, 5.0, 10.0, 5.0, 1, 0.02, 3.0, -20.0, -30.0, 180.0),
+        MotionConfig(
+            10.0,
+            5.0,
+            10.0,
+            5.0,
+            1,
+            0.05,
+            3.0,
+            -20.0,
+            -30.0,
+            180.0,
+            waypoint_min_dwell_s_by_profile={
+                "EMPTY_NORMAL": 0.15,
+                "EMPTY_SLOW": 0.20,
+                "HOLDING_SLOW": 0.30,
+                "LOCAL_POLICY": 0.15,
+            },
+        ),
     )
 
     def read_deg() -> dict[str, float]:
@@ -214,7 +231,7 @@ def main() -> int:
         result = controller.move(
             MotionGoal(
                 goal_id,
-                time.time_ns(),
+                time.monotonic_ns(),
                 "robot_base_mm",
                 pose.position_mm,
                 pose.pitch_deg,
@@ -239,7 +256,8 @@ def main() -> int:
     at_park = False
     try:
         observation = robot.connect_bumpless(
-            p_coefficient=24,
+            # 与官方 SOFollower.configure() 一致，P=16 用于降低负载下抖动。
+            p_coefficient=16,
             acceleration=30,
         )
         start = {

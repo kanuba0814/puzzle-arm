@@ -2,7 +2,7 @@
 
 `Supervisor` 是唯一可切换全局运行状态的模块，公共面仅由
 `integration.__init__` 导出。它复用冻结的 `control.MotionController`，不修改
-IK、轨迹、GPIO17、电磁铁 10 秒上限或五轴字段顺序。
+IK、轨迹、GPIO17 或五轴字段顺序。
 
 - `event_log.py` 使用单调时钟写入符合 `runtime_event.schema.json` 的 JSONL；
 - `park_sequence.py` 在 integration 层实现实测读回的 PARK↔HOME 关节空间过渡；
@@ -10,7 +10,7 @@ IK、轨迹、GPIO17、电磁铁 10 秒上限或五轴字段顺序。
 - `supervisor.py` 负责视觉/计划时效、shadow seam、急停锁定与 fail-closed 抓放门禁。
 
 继电器控制链路已由操作者确认为 `/dev/gpiochip0`、BCM GPIO17、低电平触发，
-`MagnetController` 仍保持默认关闭、10 秒超时和失败断电。PICK/PLACE 接触高度、正式
+`MagnetController` 仍保持默认关闭和失败断电；吸合后需由调用方显式关闭。PICK/PLACE 接触高度、正式
 `table_mm -> robot_base_mm` 变换、磁头 footprint/净空任一未冻结时，Supervisor 必须
 拒绝进入磁吸状态；没有调试旁路。shadow 配置不接受任何机器人、PARK mover 或磁铁
 对象，防止误动作。未来抓取 FSM 的

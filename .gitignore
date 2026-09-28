@@ -14,6 +14,8 @@ dist/
 *.img
 *.img.zst
 *.npy
+# 正式运行时单应矩阵不是可丢弃产物；必须随源码/manifest 追溯。
+!workspace/calibration/table_homography_charuco_recalibrated_20260801.npy
 *.npz
 *.onnx
 deployment/raspberry_pi/cache/

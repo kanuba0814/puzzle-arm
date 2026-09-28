@@ -1,0 +1,153 @@
+{
+  "runId": "7c42e291-eeb7-4892-bdd2-599057441e4f",
+  "agent": "reviewer",
+  "task": "Read-only review of the new 5 mm discrete puzzle layout implementation. Scope only: workspace/src/puzzle/discrete_layout.py, workspace/src/puzzle/solver.py, workspace/src/integration/_adapter_123.py, workspace/tests/test_discrete_layout.py, workspace/tests/test_puzzle_solver_synthetic.py, workspace/tools/live_detect_123.py, workspace/tools/test_adapter_123.py. Requirement: original measured geometry must still solve; after solving, preserve each piece orientation and source/grip semantics; every final polygon pair must have at least 5 mm Euclidean clearance, layout centered in TargetRegion, fail closed if clearance/bounds fail, deterministic, no new dependencies. Report concrete correctness/safety issues with severity and file/line; do not edit and do not access Pi/hardware.\n\n## Acceptance Contract\nAcceptance level: attested\nCompletion is not accepted from prose alone. End with a structured acceptance report.\n\nCriteria:\n- criterion-1: Return concrete findings with file paths and severity when applicable\n\nRequired evidence: review-findings, residual-risks\n\nFinish with a fenced JSON block tagged `acceptance-report` in this shape:\nUse empty arrays when no items apply; array fields contain strings unless object entries are shown.\n`criteriaSatisfied[].status` must be exactly one of: satisfied, not-satisfied, not-applicable.\n`commandsRun[].result` must be exactly one of: passed, failed, not-run.\n`manualNotes` and `notes` are optional strings; an empty string means no note and does not satisfy `manual-notes` evidence.\n```acceptance-report\n{\n  \"criteriaSatisfied\": [\n    {\n      \"id\": \"criterion-1\",\n      \"status\": \"satisfied\",\n      \"evidence\": \"specific proof\"\n    }\n  ],\n  \"changedFiles\": [\n    \"src/file.ts\"\n  ],\n  \"testsAddedOrUpdated\": [\n    \"test/file.test.ts\"\n  ],\n  \"commandsRun\": [\n    {\n      \"command\": \"command\",\n      \"result\": \"passed\",\n      \"summary\": \"short result\"\n    }\n  ],\n  \"validationOutput\": [\n    \"validation output or concise summary\"\n  ],\n  \"residualRisks\": [\n    \"none\"\n  ],\n  \"noStagedFiles\": true,\n  \"diffSummary\": \"short description of the diff\",\n  \"reviewFindings\": [\n    \"blocker: file.ts:12 - issue found, or no blockers\"\n  ],\n  \"manualNotes\": \"anything else the parent should know\"\n}\n```",
+  "exitCode": 0,
+  "model": "openai-codex/gpt-5.6-sol:high",
+  "attemptedModels": [
+    "openai-codex/gpt-5.6-sol:high"
+  ],
+  "modelAttempts": [
+    {
+      "model": "openai-codex/gpt-5.6-sol:high",
+      "success": true,
+      "exitCode": 0,
+      "usage": {
+        "input": 99120,
+        "output": 11557,
+        "cacheRead": 1390592,
+        "cacheWrite": 0,
+        "cost": 1.5376060000000003,
+        "turns": 21
+      }
+    }
+  ],
+  "acceptance": {
+    "status": "attested",
+    "evidenceStatus": "attested",
+    "explicit": false,
+    "effectiveAcceptance": {
+      "level": "attested",
+      "explicit": false,
+      "inferredReason": [
+        "read-only/reviewer-style agent"
+      ],
+      "criteria": [
+        {
+          "id": "criterion-1",
+          "must": "Return concrete findings with file paths and severity when applicable",
+          "evidence": [
+            "review-findings",
+            "residual-risks"
+          ],
+          "severity": "required"
+        }
+      ],
+      "evidence": [
+        "review-findings",
+        "residual-risks"
+      ],
+      "verify": [],
+      "stopRules": []
+    },
+    "inferredReason": [
+      "read-only/reviewer-style agent"
+    ],
+    "criteria": [
+      {
+        "id": "criterion-1",
+        "must": "Return concrete findings with file paths and severity when applicable",
+        "evidence": [
+          "review-findings",
+          "residual-risks"
+        ],
+        "severity": "required"
+      }
+    ],
+    "runtimeChecks": [],
+    "verifyRuns": [],
+    "childReport": {
+      "criteriaSatisfied": [
+        {
+          "id": "criterion-1",
+          "status": "satisfied",
+          "evidence": "Reported three high-severity concrete findings with scoped file/line evidence, plus measured-geometry residual risk."
+        }
+      ],
+      "changedFiles": [
+        "workspace/src/puzzle/discrete_layout.py",
+        "workspace/src/puzzle/solver.py",
+        "workspace/src/integration/_adapter_123.py",
+        "workspace/tests/test_discrete_layout.py",
+        "workspace/tests/test_puzzle_solver_synthetic.py",
+        "workspace/tools/live_detect_123.py",
+        "workspace/tools/test_adapter_123.py"
+      ],
+      "testsAddedOrUpdated": [
+        "workspace/tests/test_discrete_layout.py",
+        "workspace/tests/test_puzzle_solver_synthetic.py"
+      ],
+      "commandsRun": [
+        {
+          "command": "PYTHONPATH=workspace/src:workspace/tests python -m unittest workspace.tests.test_discrete_layout workspace.tests.test_puzzle_solver_synthetic",
+          "result": "passed",
+          "summary": "13 tests passed."
+        },
+        {
+          "command": "PYTHONPATH=workspace/src /home/gxxl/miniconda3/envs/mineru-client/bin/python workspace/tools/test_adapter_123.py",
+          "result": "passed",
+          "summary": "All 6 synthetic seeds solved with reported 5.000 mm clearance."
+        },
+        {
+          "command": "python -m py_compile <seven scoped Python files>",
+          "result": "passed",
+          "summary": "All scoped files compiled."
+        },
+        {
+          "command": "git diff --cached --check -- <seven scoped files>",
+          "result": "passed",
+          "summary": "No whitespace errors."
+        },
+        {
+          "command": "single-piece undersized TargetRegion reproduction",
+          "result": "passed",
+          "summary": "Reproduced unsafe result: SOLVED with target center (25.0, 25.0) for a 100x60 polygon in a 50x50 region."
+        },
+        {
+          "command": "PieceObservation-to-solve_puzzle_123 reproduction",
+          "result": "passed",
+          "summary": "Reproduced AttributeError for missing grip_point_table_mm."
+        },
+        {
+          "command": "placement_gap_mm=0 two-piece reproduction",
+          "result": "passed",
+          "summary": "Reproduced SOLVED output with 0.0 mm pair clearance."
+        }
+      ],
+      "validationOutput": [
+        "Core 5 mm multi-piece synthetic behavior passes.",
+        "Zero-gap configuration emits a touching SOLVED layout.",
+        "Single-piece path can emit an out-of-bounds SOLVED plan.",
+        "Canonical PieceObservation crashes in the adapter placement path."
+      ],
+      "residualRisks": [
+        "No original measured-geometry fixture was exercised.",
+        "No test covers a canonical pick_point_table_mm distinct from polygon center.",
+        "Live camera validation was not run because hardware access was prohibited."
+      ],
+      "noStagedFiles": false,
+      "diffSummary": "Adds a translation-only discrete clearance planner and integrates it with both puzzle solvers and validation tools; the scoped changes are staged.",
+      "reviewFindings": [
+        "blocker: workspace/src/puzzle/solver.py:82-90 - values below 5 mm are accepted and can produce SOLVED layouts with insufficient clearance.",
+        "blocker: workspace/src/puzzle/solver.py:378-433 - single-piece plans bypass layout centering and bounds validation.",
+        "blocker: workspace/src/integration/_adapter_123.py:308,334-336 - canonical PieceObservation uses pick_point_table_mm, but the solver accesses grip_point_table_mm and crashes.",
+        "medium: workspace/tools/test_adapter_123.py:81-85 - only generated synthetic geometry is tested, so original measured geometry remains unattested."
+      ],
+      "manualNotes": "Read-only review; the reviewer made no edits and did not access Pi or hardware."
+    }
+  },
+  "launchContractDigest": "475cb83766e9c7bd64a9ea4f6a36b8c1d8ddd54907062e306d84ee4728bdb4de",
+  "transcriptPath": "/home/gxxl/nudec-re101/.pi-subagents/artifacts/7c42e291-eeb7-4892-bdd2-599057441e4f_reviewer_transcript.jsonl",
+  "skills": [],
+  "timestamp": 1785580061716
+}

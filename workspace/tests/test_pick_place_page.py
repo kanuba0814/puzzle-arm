@@ -214,6 +214,9 @@ class PickPlacePageTestCase(unittest.TestCase):
         self.page.supervisor_tool = str(self.fake_tool)
 
     def tearDown(self) -> None:
+        self.page._stop_active_process(graceful_timeout_s=1.0)
+        if self.page.worker is not None:
+            self.page.worker.join(timeout=2.0)
         pygame.quit()
         self.temp_dir.cleanup()
         os.environ.clear()
@@ -276,25 +279,34 @@ class LayoutTest(PickPlacePageTestCase):
         estop_rect = self.page.estop_button.rect
         self.assertGreaterEqual(estop_rect.width, 96)
         self.assertGreaterEqual(estop_rect.height, 48)
-        for page_name, entry in self.page.pages.items():
-            with self.subTest(page=page_name):
-                buttons = list(entry["buttons"]) + [self.page.estop_button]
-                for button in buttons:
-                    if not button.visible:
-                        continue
-                    rect = button.rect
-                    self.assertGreaterEqual(rect.left, 0)
-                    self.assertGreaterEqual(rect.top, 0)
-                    self.assertLessEqual(rect.right, 1024)
-                    self.assertLessEqual(rect.bottom, 600)
-                    self.assertGreaterEqual(rect.height, 44)
-                visible_buttons = [button for button in buttons if button.visible]
-                for index, first in enumerate(visible_buttons):
-                    for second in visible_buttons[index + 1 :]:
-                        self.assertFalse(
-                            first.rect.colliderect(second.rect),
-                            f"{first.text} 与 {second.text} 重叠",
-                        )
+        for manual_tab in ("joint", "cartesian"):
+            self.page.manual_tab = manual_tab
+            self.page._refresh_button_states()
+            for page_name, entry in self.page.pages.items():
+                with self.subTest(page=page_name, tab=manual_tab):
+                    buttons = list(entry["buttons"]) + [self.page.estop_button]
+                    for button in buttons:
+                        if not button.visible:
+                            continue
+                        rect = button.rect
+                        self.assertGreaterEqual(rect.left, 0)
+                        self.assertGreaterEqual(rect.top, 0)
+                        self.assertLessEqual(rect.right, 1024)
+                        self.assertLessEqual(rect.bottom, 600)
+                        self.assertGreaterEqual(rect.height, 44)
+                        if button is not self.page.estop_button:
+                            self.assertLessEqual(
+                                rect.bottom,
+                                pick_place_page.BOTTOM_BAR_TOP,
+                                f"{button.text} 覆盖底栏",
+                            )
+                    visible_buttons = [button for button in buttons if button.visible]
+                    for index, first in enumerate(visible_buttons):
+                        for second in visible_buttons[index + 1 :]:
+                            self.assertFalse(
+                                first.rect.colliderect(second.rect),
+                                f"{first.text} 与 {second.text} 重叠",
+                            )
 
 
 class ResultJsonTest(PickPlacePageTestCase):
@@ -401,15 +413,17 @@ class HeartbeatTest(PickPlacePageTestCase):
 
 
 class ButtonStateTest(PickPlacePageTestCase):
-    def test_actions_greyed_and_ignored_while_running(self) -> None:
+    def test_actions_greyed_but_stop_remains_available_while_running(self) -> None:
         self.page.state = PageState.RUNNING
         self.page._refresh_button_states()
         for entry in self.page.pages.values():
             for button in entry["buttons"]:
                 if not button.visible:
                     continue
-                if button.action:
+                if button.action and button.text != "停止":
                     self.assertFalse(button.enabled, button.text)
+                elif button.text == "停止":
+                    self.assertTrue(button.enabled)
                 else:
                     self.assertTrue(button.enabled, button.text)
         park_button = next(
@@ -421,6 +435,36 @@ class ButtonStateTest(PickPlacePageTestCase):
         self.mouse_click(park_button.rect.center)
         park_button.on_click.assert_not_called()
         self.assertEqual(self.page.state, PageState.RUNNING)
+
+    def test_stop_before_worker_launch_prevents_popen(self) -> None:
+        deferred_threads = []
+
+        class DeferredThread:
+            def __init__(self, *, target, daemon: bool) -> None:
+                self.target = target
+                self.daemon = daemon
+                deferred_threads.append(self)
+
+            def start(self) -> None:
+                return None
+
+            def is_alive(self) -> bool:
+                return False
+
+            def join(self, timeout: float | None = None) -> None:
+                return None
+
+        with (
+            mock.patch.object(pick_place_page.threading, "Thread", DeferredThread),
+            mock.patch.object(self.page, "_request_magnet_off"),
+            mock.patch.object(pick_place_page.subprocess, "Popen") as popen,
+        ):
+            self.page._start_backend_request("detect", "刷新检测", {})
+            self.page.safe_abort()
+            deferred_threads[0].target()
+        popen.assert_not_called()
+        self.page._drain()
+        self.assertEqual(self.page.state, PageState.FAULT)
 
     def test_actions_enabled_again_in_fault_for_recovery(self) -> None:
         self.page.state = PageState.FAULT
@@ -632,10 +676,17 @@ class FakeSupervisorRunTest(PickPlacePageTestCase):
 
 
 class FontAndLockTest(PickPlacePageTestCase):
-    def test_pick_place_locked_without_calibration(self) -> None:
-        reason = pick_place_page.pick_place_lock_reason()
-        self.assertIsNotNone(reason)
-        self.assertIn("UNKNOWN", reason)
+    def test_pick_place_lock_message_is_rendered_when_gate_rejects(self) -> None:
+        with mock.patch.object(
+            pick_place_page,
+            "pick_place_lock_reason",
+            return_value="PICK/PLACE 接触高度 UNKNOWN：未验收",
+        ):
+            self.page.run_self_checks()
+            self.page.draw()
+        check = next(item for item in self.page.self_checks if item[0] == "正式抓放")
+        self.assertEqual(check[1], "UNKNOWN")
+        self.assertIn("UNKNOWN", check[2])
 
     def test_missing_cjk_font_raises_on_screen_error(self) -> None:
         with mock.patch.object(pick_place_page, "find_font", return_value=None):
@@ -665,7 +716,10 @@ class SelfCheckTest(PickPlacePageTestCase):
 
 
 class CompetitionPageTest(PickPlacePageTestCase):
-    def test_three_modes_and_120s_visible(self) -> None:
+    def test_three_modes_render_without_competition_timer(self) -> None:
+        source = Path(pick_place_page.__file__).read_text(encoding="utf-8")
+        self.assertNotIn("COMPETITION_TIMEOUT_S", source)
+        self.assertNotIn("官方限时", source)
         self.page.page = "competition"
         self.page.draw()
         surface = self.page.screen
@@ -717,10 +771,40 @@ class CompetitionPageTest(PickPlacePageTestCase):
         self.assertEqual(len(self.backend.requests), 1)
         command_id, _ = self.backend.requests[0]
         self.assertEqual(command_id, "competition-self-color")
-        self.assertIsNotNone(self.page.competition_started_monotonic)
+        self.page._refresh_button_states()
+        stop_buttons = [
+            button
+            for entry in self.page.pages.values()
+            for button in entry["buttons"]
+            if button.text == "停止"
+        ]
+        self.assertEqual(len(stop_buttons), 2)
+        self.assertTrue(all(button.enabled for button in stop_buttons))
+        self.pump()
 
 
 class ManualPageTest(PickPlacePageTestCase):
+    def test_manual_readback_updates_joint_and_tcp_widgets(self) -> None:
+        payload = {
+            "final_joint_deg": {
+                "shoulder_pan": 1.0,
+                "shoulder_lift": 2.0,
+                "elbow_flex": 3.0,
+                "wrist_flex": 4.0,
+                "wrist_roll": 5.0,
+            },
+            "tcp_pose": {
+                "frame": "robot_base_mm",
+                "position_mm": [10.0, 20.0, 30.0],
+                "pitch_deg": -87.5,
+                "yaw_deg": 12.0,
+            },
+        }
+        self.page._apply_manual_readback(payload)
+        self.assertEqual(self.page.joint_readbacks["wrist_roll"], 5.0)
+        self.assertEqual(self.page.tcp_readback["z"], 30.0)
+        self.assertEqual(self.page.tcp_readback["yaw"], 12.0)
+
     def test_manual_unlock_fails_when_locked_or_running(self) -> None:
         self.page.state = PageState.RUNNING
         self.page.manual_unlock()
@@ -771,20 +855,32 @@ class ManualPageTest(PickPlacePageTestCase):
                 for shared in ("读取状态", "回 PARK", "五轴断力矩", "立即断电"):
                     self.assertIn(shared, texts)
 
-    def test_magnet_duration_limited_to_1_3_5(self) -> None:
+    def test_magnet_duration_can_exceed_10_seconds(self) -> None:
         self.page._set_magnet_duration(5.0)
         self.assertEqual(self.page.magnet_duration_s, 5.0)
         backend = SupervisorRunBackend(
             python_path=sys.executable,
             supervisor_tool=Path("/dev/null"),
         )
-        with self.assertRaises(ValueError):
-            backend.build_request(
-                "manual-magnet-pulse",
-                {"duration_s": 11.0},
-                status_path=Path("/tmp/s.json"),
-                result_path=Path("/tmp/r.json"),
-            )
+        backend.override_capabilities(
+            {
+                "manual-magnet-pulse": BackendCapability(
+                    command_id="manual-magnet-pulse",
+                    availability=CapabilityAvailability.READY,
+                    reason="ready",
+                    requires_robot=True,
+                    requires_manual_unlock=True,
+                )
+            }
+        )
+        request = backend.build_request(
+            "manual-magnet-pulse",
+            {"duration_s": 11.0},
+            status_path=Path("/tmp/s.json"),
+            result_path=Path("/tmp/r.json"),
+        )
+        self.assertIn("11.000", request.argv)
+        self.assertEqual(request.timeout_s, 26.0)
 
     def test_magnet_off_does_not_require_unlock(self) -> None:
         self.page.manual_magnet_off()
@@ -793,6 +889,15 @@ class ManualPageTest(PickPlacePageTestCase):
 
 
 class DebugPageTest(PickPlacePageTestCase):
+    def test_camera_calibration_starts_candidate_only_request(self) -> None:
+        self.page.calibrate_camera()
+        self.assertEqual(self.page.state, PageState.RUNNING)
+        command_id, parameters = self.backend.requests[-1]
+        self.assertEqual(command_id, "camera-calibration")
+        self.assertEqual(parameters, {})
+        self.assertIn("候选", self.page.current_action["label"])
+        self.pump()
+
     def test_debug_switches_do_not_modify_environment(self) -> None:
         before = dict(os.environ)
         self.page._toggle_debug_switch("debug_overlays")
@@ -812,8 +917,61 @@ class DebugPageTest(PickPlacePageTestCase):
         self.assertFalse(self.page.debug_generic_vision)
 
 
+class UnlockPageTest(PickPlacePageTestCase):
+    def test_unlock_requires_every_current_lock_item_before_request(self) -> None:
+        self.motion_lock.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "clear_requires": ["现场支撑机械臂", "确认磁铁 OFF"],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        self.page._goto("unlock")
+        self.assertEqual(self.page.unlock_checked, [False, False])
+        self.page._submit_motion_lock_clear()
+        self.assertEqual(len(self.backend.requests), 0)
+        self.page._toggle_unlock_requirement(0)
+        self.page._toggle_unlock_requirement(1)
+        self.page._submit_motion_lock_clear()
+        self.assertEqual(self.backend.requests[-1][0], "manual-clear-motion-lock")
+        confirmation = json.loads(
+            (self.runtime_dir / "gui/motion_lock_confirmation.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertTrue(all(item["checked"] for item in confirmation["requirements"]))
+        self.assertEqual(
+            confirmation["operator_confirmation"],
+            pick_place_page.LOCK_CLEAR_CONFIRMATION,
+        )
+        self.pump()
+
+    def test_hold_button_requires_two_seconds(self) -> None:
+        calls: list[str] = []
+        button = pick_place_page.HoldPageButton(
+            (0, 0, 100, 48),
+            "hold",
+            lambda: calls.append("confirmed"),
+            hold_seconds=2.0,
+            on_too_short=lambda: calls.append("short"),
+        )
+        down = pygame.event.Event(pygame.MOUSEBUTTONDOWN, {"pos": (10, 10), "button": 1})
+        up = pygame.event.Event(pygame.MOUSEBUTTONUP, {"pos": (10, 10), "button": 1})
+        with mock.patch.object(pick_place_page.time, "monotonic", side_effect=[1.0, 2.5]):
+            button.handle(down)
+            button.handle(up)
+        self.assertEqual(calls, ["short"])
+        with mock.patch.object(pick_place_page.time, "monotonic", side_effect=[3.0, 5.1]):
+            button.handle(down)
+            button.handle(up)
+        self.assertEqual(calls, ["short", "confirmed"])
+
+
 class MagnetBackendTest(unittest.TestCase):
-    def test_backend_rejects_over_10s_pulse(self) -> None:
+    def test_backend_accepts_pulse_over_10_seconds(self) -> None:
         backend = SupervisorRunBackend(
             python_path=sys.executable,
             supervisor_tool=Path("/dev/null"),
@@ -829,15 +987,15 @@ class MagnetBackendTest(unittest.TestCase):
                 )
             }
         )
-        with self.assertRaises(ValueError):
-            backend.build_request(
-                "manual-magnet-pulse",
-                {"duration_s": 11.0},
-                status_path=Path("/tmp/s.json"),
-                result_path=Path("/tmp/r.json"),
-            )
+        request = backend.build_request(
+            "manual-magnet-pulse",
+            {"duration_s": 11.0},
+            status_path=Path("/tmp/s.json"),
+            result_path=Path("/tmp/r.json"),
+        )
+        self.assertIn("11.000", request.argv)
 
-    def test_backend_rejects_infinite_hold(self) -> None:
+    def test_backend_rejects_nonpositive_pulse(self) -> None:
         backend = SupervisorRunBackend(
             python_path=sys.executable,
             supervisor_tool=Path("/dev/null"),
@@ -859,6 +1017,30 @@ class MagnetBackendTest(unittest.TestCase):
                 {"duration_s": 0.0},
                 status_path=Path("/tmp/s.json"),
                 result_path=Path("/tmp/r.json"),
+            )
+
+    def test_camera_calibration_uses_frozen_camera_and_no_robot_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            camera = Path(temporary_directory) / "epuzzle-camera"
+            camera.touch()
+            backend = SupervisorRunBackend(
+                python_path=sys.executable,
+                supervisor_tool=Path("/dev/null"),
+                robot_port=Path(temporary_directory) / "missing-arm",
+                camera_device=camera,
+            )
+            capability = backend.capabilities()["camera-calibration"]
+            self.assertEqual(capability.availability, CapabilityAvailability.READY)
+            self.assertFalse(capability.requires_robot)
+            request = backend.build_request(
+                "camera-calibration",
+                {},
+                status_path=Path("/tmp/s.json"),
+                result_path=Path("/tmp/r.json"),
+            )
+            self.assertEqual(request.timeout_s, 55.0)
+            self.assertEqual(
+                request.argv[request.argv.index("--camera") + 1], str(camera)
             )
 
     def test_backend_builds_jog_joint_argv(self) -> None:

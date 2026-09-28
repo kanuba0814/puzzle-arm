@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "frame_size": [
+    1280,
+    720
+  ],
+  "material": "green",
+  "px_per_mm": 3.0,
+  "homography_file": "workspace/calibration/table_homography_gui_20260731.npy",
+  "homography_sha256": "f1d28769d1a13c0c3231c5e97b8028863cc1b08e3ddbb6298422c0a96dec8507",
+  "source_image_sha256": "11584bad02743909c7fafbf2830915cfc455f077f1787b6f6c290065809789eb",
+  "status": "REJECTED",
+  "error_code": "VISION_SURFACE_MISMATCH",
+  "processing_time_ms": 43.668463,
+  "pieces": []
+}

@@ -219,11 +219,6 @@ TARGET_CENTER_Y = 223.0  # 下半区域中心
 PIECE_LENGTH = 80.0  # 碎片长度
 PIECE_WIDTH = 20.0  # 碎片宽度
 
-# 自备碎片目标矩形 (2026-08-01 实测确认: 4片拼成 10×6cm, 非旧模板 8×8)
-TASK1_TARGET_RECT_MM = (100.0, 60.0)
-# 检测/求解误差下的接受容差 (123 实拍反推误差 ±3-5mm, 暗光放宽到 15mm)
-TASK1_RECT_TOL_MM = 15.0
-
 # 碎片颜色 (HSV范围，用于颜色检测)
 PIECE_COLOR_HSV = {
     "lower": np.array([0, 80, 80]),  # 需根据实际颜色标定

@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-08-01",
+  "test": "five_axis_motion_rewrite_pi_hardware",
+  "host": "epuzzle@192.168.1.110",
+  "source_commit": "fda892cba81032c46c40976a48c9ceadbf40a9ca",
+  "software": {
+    "lerobot": "0.6.0",
+    "p_coefficient": 16,
+    "acceleration": 30,
+    "poll_interval_s": 0.05,
+    "waypoint_dwell_s": {
+      "EMPTY_NORMAL": 0.15,
+      "EMPTY_SLOW": 0.2,
+      "HOLDING_SLOW": 0.3
+    }
+  },
+  "hardware_read_only": {
+    "servo_ids": [1, 2, 3, 4, 5],
+    "model": "STS3215",
+    "firmware": "3.10",
+    "present_voltage_raw": {
+      "shoulder_pan": 48,
+      "shoulder_lift": 49,
+      "elbow_flex": 49,
+      "wrist_flex": 49,
+      "wrist_roll": 49
+    }
+  },
+  "static_hold": {
+    "status": "STATIC_HOLD_OK",
+    "duration_s": 10.126,
+    "sample_count": 49,
+    "position_span_deg": {
+      "shoulder_pan": 0.0,
+      "shoulder_lift": 0.0,
+      "elbow_flex": 0.0,
+      "wrist_flex": 0.0,
+      "wrist_roll": 0.0
+    },
+    "temperature_c_range": {
+      "shoulder_pan": [28, 29],
+      "shoulder_lift": [28, 29],
+      "elbow_flex": [28, 29],
+      "wrist_flex": [28, 29],
+      "wrist_roll": [30, 30]
+    },
+    "torque_before_disconnect": {
+      "shoulder_pan": 1,
+      "shoulder_lift": 1,
+      "elbow_flex": 1,
+      "wrist_flex": 1,
+      "wrist_roll": 1
+    }
+  },
+  "motion_roundtrip": {
+    "status": "FAILED_FORMAL_PARK",
+    "park_to_home": {
+      "success": true,
+      "duration_s": 15.1,
+      "final_deg": {
+        "shoulder_pan": -7.69,
+        "shoulder_lift": -22.24,
+        "elbow_flex": 40.84,
+        "wrist_flex": 83.16,
+        "wrist_roll": -82.33
+      }
+    },
+    "home_to_park": {
+      "success": false,
+      "duration_s": 15.1,
+      "final_deg": {
+        "shoulder_pan": -94.99,
+        "shoulder_lift": -92.57,
+        "elbow_flex": 94.73,
+        "wrist_flex": 80.0,
+        "wrist_roll": -82.33
+      },
+      "formal_park_max_error_deg": 7.648,
+      "failure_analysis": "该末点误差小于旧的 8° follow_tolerance、但大于正式 PARK 4° 容差；随后已修复为 HOME→PARK 最后路点直接使用正式 PARK 容差。"
+    }
+  },
+  "post_test_code_fix": {
+    "final_park_waypoint_uses_formal_tolerance": true,
+    "hardware_retest_after_fix": false,
+    "offline_tests": "local pytest 19 passed; Pi unittest 21 passed"
+  },
+  "full_pick_place_attempt": {
+    "status": "MOTION_AND_MAGNET_SEQUENCE_COMPLETED_UNSENSED",
+    "material": "green",
+    "vision_source": "/home/epuzzle/green_piece_detection/after_abort/pieces.json",
+    "camera_refresh_bypassed_explicitly": true,
+    "piece_id": "piece-1",
+    "pick_point_table_mm": [88.33, 246.67],
+    "place_table_mm": [105.0, 100.0],
+    "duration_s": 54.579,
+    "supervisor_success": true,
+    "sensor_verified": false,
+    "final_max_park_error_deg": 2.637,
+    "final_torque_enable_all_zero": true,
+    "magnet_enabled_after_cleanup": false,
+    "manual_piece_pick_place_confirmation": "PENDING"
+  },
+  "recovery": {
+    "status": "FORMAL_PARK_REDEFINED_TO_CURRENT_POSE",
+    "torque_enable_after_cleanup": {
+      "shoulder_pan": 0,
+      "shoulder_lift": 0,
+      "elbow_flex": 0,
+      "wrist_flex": 0,
+      "wrist_roll": 0
+    },
+    "current_pose_deg": {
+      "shoulder_pan": -94.9011,
+      "shoulder_lift": -99.9560,
+      "elbow_flex": 94.9890,
+      "wrist_flex": 70.7692,
+      "wrist_roll": -82.3297
+    },
+    "current_pose_is_not_formal_park": false,
+    "redefinition_sample_count": 5,
+    "redefinition_sample_window_s": 0.8,
+    "notes": [
+      "The operator explicitly approved the stable current readback as the new formal PARK.",
+      "The old formal PARK and runtime manifest were backed up before redefinition.",
+      "The new PARK is an operator-approved pose, not a new kinematic or motor calibration."
+    ]
+  }
+}

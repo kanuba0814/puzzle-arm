@@ -218,6 +218,20 @@ class MotionControllerTest(unittest.TestCase):
         self.assertEqual(len(robot.sent_actions), 1)
         self.assertEqual(result.final_joint_deg, target.as_mapping())
 
+    def test_intermediate_waypoint_min_dwell_prevents_immediate_burst(self) -> None:
+        robot = FakeRobot([self.start.as_mapping()])
+        controller = self._controller(robot)
+
+        converged = controller._wait_for_target(
+            self.start,
+            tolerance_deg=0.2,
+            stable_samples=1,
+            minimum_dwell_s=0.03,
+        )
+
+        self.assertEqual(converged, self.start)
+        self.assertGreaterEqual(self.clock.now, 0.03)
+
     def test_timeout_reports_comm_failure_instead_of_false_success(self) -> None:
         target = JointVector((0.0, 2.0, -90.0, 88.0, 0.0))
         target_pose = self.model.forward(target)

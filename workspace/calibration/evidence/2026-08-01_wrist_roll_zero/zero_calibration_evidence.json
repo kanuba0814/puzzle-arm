@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "timestamp": "2026-08-01T15:37:06+0800",
+  "robot_type": "so101_follower_5d",
+  "joint": "wrist_roll.pos",
+  "servo_id": 5,
+  "method": "current_pose_as_encoder_and_mechanical_zero",
+  "torque_enable_before": 0,
+  "goal_position_commands_sent": 0,
+  "present_position_before": 1311,
+  "homing_offset_before": -1960,
+  "actual_position_mod_4096": 3447,
+  "homing_offset_after": 1400,
+  "present_position_after": 2047,
+  "normalized_degrees_after": -0.043956,
+  "torque_enable_after": 0,
+  "joint_direction_before": -1,
+  "joint_direction_after": -1,
+  "kinematic_zero_offset_before_deg": -82.153846,
+  "kinematic_zero_offset_after_deg": 0.0,
+  "range_min": 0,
+  "range_max": 4095,
+  "verification": {
+    "hardware_calibration_match": true,
+    "encoder_zero_error_ticks": 0,
+    "encoder_zero_error_deg": 0.043956,
+    "direction_changed": false,
+    "formal_park_pose_updated": true
+  },
+  "note": "当前静止姿态同时登记为 wrist_roll 机械安装零位与编码器逻辑零位；其他四轴零位和方向未改变。"
+}

@@ -30,6 +30,8 @@
         "competition-self-color",
         "competition-white",
         "competition-card",
+        "camera-calibration",
+        "manual-clear-motion-lock",
         "manual-read-state",
         "manual-jog-joint",
         "manual-jog-cartesian",

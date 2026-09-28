@@ -1,0 +1,134 @@
+{
+  "runId": "bcf27af9-b0c6-45d2-8dd4-3e54f0c9a7c9",
+  "agent": "context-builder",
+  "task": "只读分析本仓库的树莓派 7 英寸 GUI：定位入口、后端接线、触摸/evdev 映射与布局重叠的实际根因；提出最小可交付的“GUI 功能接通 + 触摸修复 + 防重叠”实现清单、涉及文件和可测试验收条件。不要改文件，不要访问 Pi 或执行硬件动作。优先检查 workspace/apps、pi_puzzle、docs、tests。\n\n---\n**Output:**\nWrite your findings to exactly this path: /home/gxxl/nudec-re101/.pi-subagents/artifacts/outputs/bcf27af9-b0c6-45d2-8dd4-3e54f0c9a7c9/gui-context-deepseek.md\nThis path is authoritative for this run.\nIgnore any other output filename or output path mentioned elsewhere, including output destinations in the base agent prompt, system prompt, or task instructions.\n\n## Acceptance Contract\nAcceptance level: attested\nCompletion is not accepted from prose alone. End with a structured acceptance report.\n\nCriteria:\n- criterion-1: Return concrete findings with file paths and severity when applicable\n\nRequired evidence: review-findings, residual-risks\n\nFinish with a fenced JSON block tagged `acceptance-report` in this shape:\nUse empty arrays when no items apply; array fields contain strings unless object entries are shown.\n`criteriaSatisfied[].status` must be exactly one of: satisfied, not-satisfied, not-applicable.\n`commandsRun[].result` must be exactly one of: passed, failed, not-run.\n`manualNotes` and `notes` are optional strings; an empty string means no note and does not satisfy `manual-notes` evidence.\n```acceptance-report\n{\n  \"criteriaSatisfied\": [\n    {\n      \"id\": \"criterion-1\",\n      \"status\": \"satisfied\",\n      \"evidence\": \"specific proof\"\n    }\n  ],\n  \"changedFiles\": [\n    \"src/file.ts\"\n  ],\n  \"testsAddedOrUpdated\": [\n    \"test/file.test.ts\"\n  ],\n  \"commandsRun\": [\n    {\n      \"command\": \"command\",\n      \"result\": \"passed\",\n      \"summary\": \"short result\"\n    }\n  ],\n  \"validationOutput\": [\n    \"validation output or concise summary\"\n  ],\n  \"residualRisks\": [\n    \"none\"\n  ],\n  \"noStagedFiles\": true,\n  \"diffSummary\": \"short description of the diff\",\n  \"reviewFindings\": [\n    \"blocker: file.ts:12 - issue found, or no blockers\"\n  ],\n  \"manualNotes\": \"anything else the parent should know\"\n}\n```",
+  "exitCode": 0,
+  "model": "deepseek/deepseek-v4-flash:medium",
+  "attemptedModels": [
+    "deepseek/deepseek-v4-flash:medium"
+  ],
+  "modelAttempts": [
+    {
+      "model": "deepseek/deepseek-v4-flash:medium",
+      "success": true,
+      "exitCode": 0,
+      "usage": {
+        "input": 111465,
+        "output": 36764,
+        "cacheRead": 2635648,
+        "cacheWrite": 0,
+        "cost": 0.0332788344,
+        "turns": 32
+      }
+    }
+  ],
+  "acceptance": {
+    "status": "attested",
+    "evidenceStatus": "attested",
+    "explicit": false,
+    "effectiveAcceptance": {
+      "level": "attested",
+      "explicit": false,
+      "inferredReason": [
+        "read-only/reviewer-style agent"
+      ],
+      "criteria": [
+        {
+          "id": "criterion-1",
+          "must": "Return concrete findings with file paths and severity when applicable",
+          "evidence": [
+            "review-findings",
+            "residual-risks"
+          ],
+          "severity": "required"
+        }
+      ],
+      "evidence": [
+        "review-findings",
+        "residual-risks"
+      ],
+      "verify": [],
+      "stopRules": []
+    },
+    "inferredReason": [
+      "read-only/reviewer-style agent"
+    ],
+    "criteria": [
+      {
+        "id": "criterion-1",
+        "must": "Return concrete findings with file paths and severity when applicable",
+        "evidence": [
+          "review-findings",
+          "residual-risks"
+        ],
+        "severity": "required"
+      }
+    ],
+    "runtimeChecks": [],
+    "verifyRuns": [],
+    "childReport": {
+      "criteriaSatisfied": [
+        {
+          "id": "criterion-1",
+          "status": "satisfied",
+          "evidence": "workspace/apps/pick_place_page.py:491,602,1266-1281,1317-1320,1545/1548,1676-1683,1824；workspace/rpi_gui_snapshot/gui_fb.py:167,179,248,266,287,309,326-332；workspace/src/integration/competition_backend.py:140-155,321-345；workspace/tools/supervisor_run.py:936,1266-1269；workspace/tests/test_pick_place_page.py:274,635；deployment/raspberry_pi/overlay/etc/systemd/system/epuzzle-gui.service；workspace/tools/start_pick_place_page.sh。布局重叠用纯算术脚本复现（5 处 cartesian 步长 vs 导航、导航 vs 底栏、debug 面板重叠）。测试实测：test_pick_place_page 40 项 1 失败（非 hermetic）、test_gui_touch 7 项过（需 PYTHONPATH）、test_deployment_contracts 16 项过。"
+        }
+      ],
+      "changedFiles": [],
+      "testsAddedOrUpdated": [],
+      "commandsRun": [
+        {
+          "command": "python3 workspace/tests/test_pick_place_page.py",
+          "result": "failed",
+          "summary": "40 tests, 1 failure: test_pick_place_locked_without_calibration 因真实标定文件已 accepted 而失败（测试非 hermetic）"
+        },
+        {
+          "command": "PYTHONPATH=workspace/src python3 workspace/rpi_gui_snapshot/test_gui_touch.py",
+          "result": "passed",
+          "summary": "7 tests OK（裸跑会因 gui_backend import control.magnet_controller 失败）"
+        },
+        {
+          "command": "python3 workspace/tests/test_deployment_contracts.py",
+          "result": "passed",
+          "summary": "16 tests OK（GUI service/启动脚本/镜像 pygame 断言）"
+        },
+        {
+          "command": "python3 布局重叠复现脚本（内联，未建文件）",
+          "result": "passed",
+          "summary": "确认 manual cartesian 5 处重叠、导航底部 538>536、debug 面板重叠、日志面板 vs 导航重叠"
+        }
+      ],
+      "validationOutput": [
+        "test_pick_place_page: 39/40 通过；唯一失败为环境依赖测试（标定文件状态）",
+        "test_gui_touch: 7/7 通过",
+        "test_deployment_contracts: 16/16 通过",
+        "布局算术复现：deg1-4 vs 比赛/运行 导航 y=494-500 重叠；导航 bottom 538 > BOTTOM_BAR_TOP 536；debug t4-t6 vs 能力面板；导航 vs 日志面板"
+      ],
+      "residualRisks": [
+        "QDTECH MPI700 实际 evdev 协议（BTN_TOUCH vs ABS_MT_TRACKING_ID）未在 Pi 实证，触摸根因是代码缺失+候选根因，落地前需现场 evtest 确认",
+        "布局算术基于 1024×600 常量，fb0 分辨率不同需重算",
+        "start_pick_place_page.sh 默认用 /usr/bin/python3 跑 GUI，而镜像 pygame 装在 venv；建议现场确认 EPUZZLE_PYTHON",
+        "_INPUT_EVENT struct 'llHHI' 为 64 位 timeval 假设"
+      ],
+      "noStagedFiles": true,
+      "diffSummary": "只读分析，无代码改动；交付上下文文件 gui-context-deepseek.md",
+      "reviewFindings": [
+        "blocker: workspace/apps/pick_place_page.py:491 - manual cartesian 角度步长行(456..500)与底部导航(494..538)重叠 5 处，误触级",
+        "high: workspace/rpi_gui_snapshot/gui_fb.py:287,326-332 - EvdevTouchReader 不处理 ABS_MT_TRACKING_ID，protocol B 无 BTN_TOUCH 时触摸全死（候选根因，需 Pi 实证）",
+        "high: workspace/apps/pick_place_page.py:1266-1281 - RUNNING 时禁用全部 action 按钮，run 页'安全中止'(line 838) 在运行中不可用，只剩急停",
+        "medium: workspace/rpi_gui_snapshot/gui_fb.py:266 - _find_device 名称硬匹配 QDTECH+MPI700，无 fallback，失败即启动崩溃",
+        "medium: workspace/rpi_gui_snapshot/gui_fb.py:179,309 - 轴范围 0..0 抛 ValueError、poll() 不捕获 OSError(EIO)，设备未就绪/拔出都会崩 GUI",
+        "medium: workspace/apps/pick_place_page.py:602,85 - 导航 bottom 538 > 底栏 top 536，全页 2px 覆盖",
+        "medium: workspace/apps/pick_place_page.py:574,1824 - debug 工具行1 与能力面板、日志面板与导航重叠（视觉遮挡）",
+        "low: workspace/apps/pick_place_page.py:1545,1548 - 选中标记与 reason 同坐标叠字；1676-1683 锁文本被 读取状态/回PARK 按钮盖住",
+        "low: workspace/tests/test_pick_place_page.py:274 - LayoutTest 只测 joint tab 可见按钮、只做按钮-按钮检查，测不到上述重叠",
+        "low: workspace/tests/test_pick_place_page.py:635 - 测试依赖真实标定文件状态，非 hermetic，当前环境必失败"
+      ],
+      "manualNotes": "最小可交付三块：A 防重叠（cartesian 步长行上移/导航改 490×40/debug 面板下移/比赛页 reason 换行）；B 触摸（TRACKING_ID 跟踪、名称 fallback、轴范围与 EIO 容错、抬指清光标、方向配置位）；C 功能接通（仅'安全中止'在 RUNNING 保持可点 + 测试 hermetic 化）。competition-*/manual-* UNAVAILABLE 是刻意安全态，不得强行接通。验收以三个测试套件全绿 + 新增布局/evdev 回归 + Pi 实机 evtest 与触摸目测为准。"
+    }
+  },
+  "launchContractDigest": "574cc757cdd32fcfbdb2f7b80f353df1421bbd05b038ffca5094e67a3162ad15",
+  "transcriptPath": "/home/gxxl/nudec-re101/.pi-subagents/artifacts/bcf27af9-b0c6-45d2-8dd4-3e54f0c9a7c9_context-builder_transcript.jsonl",
+  "skills": [],
+  "timestamp": 1785575040026
+}

@@ -112,7 +112,13 @@ class JointSpaceParkMover:
         )
         try:
             self._interpolate(self._read(), upright)
-            self._interpolate(upright, destination)
+            self._interpolate(
+                upright,
+                destination,
+                final_tolerance_deg=(
+                    self._park_tolerance_deg if destination == self._park else None
+                ),
+            )
         except ParkMoveError as error:
             return ParkMoveResult(False, error.code, str(error))
         return ParkMoveResult(True, None, "PARK/HOME 过渡完成")
@@ -125,7 +131,13 @@ class JointSpaceParkMover:
                 ParkMoveErrorCode.PARK_TRANSITION_FAILED, "五轴读回无效"
             ) from error
 
-    def _interpolate(self, start: JointVector, target: JointVector) -> None:
+    def _interpolate(
+        self,
+        start: JointVector,
+        target: JointVector,
+        *,
+        final_tolerance_deg: float | None = None,
+    ) -> None:
         largest_delta = max(
             abs(target_value - start_value)
             for start_value, target_value in zip(
@@ -133,6 +145,7 @@ class JointSpaceParkMover:
             )
         )
         steps = max(1, math.ceil(largest_delta / self._step_deg))
+        per_step_timeout_s = 5.0
         for index in range(1, steps + 1):
             ratio = index / steps
             values = tuple(
@@ -145,10 +158,30 @@ class JointSpaceParkMover:
                 (values[0], values[1], values[2], values[3], values[4])
             )
             self._robot.send_action(command.as_mapping())
-            if self._settle_s:
-                self._sleep(self._settle_s)
-            actual = self._read()
-            if actual.max_abs_error(command) > self._follow_tolerance_deg:
-                raise ParkMoveError(
-                    ParkMoveErrorCode.PARK_TRANSITION_FAILED, "PARK/HOME 跟随误差超限"
-                )
+            # 轮询读回直到接近命令再走下一步（2026-08-01 实机修复：
+            # 原来 settle 60ms 未真正生效，误差尚小时会以总线最快速度连续
+            # 下发路点。现在先保证最小保持时间，再等待跟随容差，避免机械臂
+            # 受重力滞后时出现目标突变和高频通信）。
+            sent_at = self._monotonic()
+            deadline = sent_at + per_step_timeout_s
+            waypoint_tolerance_deg = self._follow_tolerance_deg
+            if index == steps and final_tolerance_deg is not None:
+                # 回正式 PARK 的最后一个路点不能使用巡航跟随容差；否则
+                # 8° 宽容差会让 7° 误差被当成完成，随后正式 PARK 验收才失败。
+                waypoint_tolerance_deg = final_tolerance_deg
+            while True:
+                actual = self._read()
+                elapsed = self._monotonic() - sent_at
+                error_deg = actual.max_abs_error(command)
+                if elapsed >= self._settle_s and error_deg <= waypoint_tolerance_deg:
+                    break
+                if self._monotonic() >= deadline:
+                    raise ParkMoveError(
+                        ParkMoveErrorCode.PARK_TRANSITION_FAILED,
+                        f"PARK/HOME 单步跟随超时，误差 {error_deg:.2f}° "
+                        f"> {waypoint_tolerance_deg:.2f}°",
+                    )
+                # settle 期间按固定采样周期等待，不能紧密 read-loop；否则
+                # “最小保持时间”反而会制造更多串口请求。
+                remaining_settle = max(0.0, self._settle_s - elapsed)
+                self._sleep(min(0.05, remaining_settle) if remaining_settle else 0.05)

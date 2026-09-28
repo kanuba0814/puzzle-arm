@@ -157,8 +157,19 @@ config += (
 config_path.write_text(config, encoding="utf-8")
 
 arguments = cmdline_path.read_text(encoding="utf-8").strip().split()
-arguments = [argument for argument in arguments if not argument.startswith("console=serial")]
-for required_argument in ("usbcore.autosuspend=-1", "cfg80211.ieee80211_regdom=CN"):
+arguments = [
+    argument
+    for argument in arguments
+    if not argument.startswith("console=serial")
+    and not argument.startswith("video=HDMI-A-2:")
+]
+# QDTECH MPI700 实屏为 1024×600。未固定时 KMS 曾选择 1024×768，导致
+# fb0 与触摸逻辑坐标高度不一致；HDMI-A-2 是当前 Pi 5 实机已枚举连接器。
+for required_argument in (
+    "usbcore.autosuspend=-1",
+    "cfg80211.ieee80211_regdom=CN",
+    "video=HDMI-A-2:1024x600@60",
+):
     if required_argument not in arguments:
         arguments.append(required_argument)
 cmdline_path.write_text(" ".join(arguments) + "\n", encoding="utf-8")
@@ -183,8 +194,10 @@ chmod 0600 "$BUILD_DIR/root/home/pi/.ssh/authorized_keys"
 chmod 0755 \
 	"$BUILD_DIR/root/usr/local/lib/epuzzle/magnet-off.py" \
 	"$BUILD_DIR/root/usr/local/sbin/epuzzle-selfcheck" \
-	"$BUILD_DIR/root/usr/local/sbin/epuzzle-offline-reinstall"
+	"$BUILD_DIR/root/usr/local/sbin/epuzzle-offline-reinstall" \
+	"$BUILD_DIR/root/usr/local/sbin/epuzzle-clear-motion-lock"
 chmod 0640 "$BUILD_DIR/root/etc/epuzzle/epuzzle.env"
+chmod 0440 "$BUILD_DIR/root/etc/sudoers.d/epuzzle-clear-motion-lock"
 chmod 0600 "$BUILD_DIR/root/etc/NetworkManager/system-connections/epuzzle-direct.nmconnection"
 if grep -Eq '^dns-priority=-' \
 	"$BUILD_DIR/root/etc/NetworkManager/system-connections/epuzzle-direct.nmconnection"; then

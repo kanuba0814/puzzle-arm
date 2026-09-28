@@ -1,5 +1,7 @@
 # pyright: reportMissingImports=false
 
+from collections.abc import Mapping
+
 from lerobot.cameras import make_cameras_from_configs
 from lerobot.motors import Motor, MotorNormMode
 from lerobot.motors.feetech import FeetechMotorsBus, OperatingMode
@@ -49,8 +51,10 @@ class SO101Follower5D(SOFollower):
             calibration=self.calibration,
         )
         self.cameras = make_cameras_from_configs(config.cameras)
-        # Goal_Velocity 是舵机 SRAM 配置；同一速度档不应随每个路点重复写入。
+        # Goal_Velocity 是舵机 SRAM 配置，不是每个位置路点都要重复写入的
+        # 动作字段；缓存它可把一条路点的两次总线写请求降为一次。
         self._last_goal_velocity: int | None = None
+        self._last_goal_velocity_by_joint: dict[str, int] = {}
 
     def connect_bumpless(
         self,
@@ -64,6 +68,7 @@ class SO101Follower5D(SOFollower):
         try:
             self.bus.connect()
             self._last_goal_velocity = None
+            self._last_goal_velocity_by_joint = {}
             self.bus.disable_torque()
             if not self.is_calibrated:
                 raise RuntimeError("LeRobot 五轴电机标定寄存器不一致")
@@ -106,14 +111,71 @@ class SO101Follower5D(SOFollower):
                     self.bus.disconnect(disable_torque=True)
             raise
 
+    def reconnect_lite(self) -> dict[str, float]:
+        """USB 串口桥掉线后的轻量重连：不断力矩、不重配电机、不碰标定寄存器。
+
+        与 connect_bumpless 的区别：舵机独立供电、寄存器状态在 USB 断开期间保持
+        （USB 断开只影响 CH343 串口桥），因此重连不执行 disable_torque /
+        configure_motors / enable_torque 循环，避免机械臂在空中瞬时掉力矩。
+
+        流程：打开串口 → 校验冻结标定 → 读 Present_Position → 对齐
+        Goal_Position=Present → 读回校验（<=1 LSB）→ 校验 Torque_Enable 五轴
+        全 1（任一为 0 视为舵机掉电/未知状态，fail-closed 抛错）→ 返回实际角度。
+        """
+        if self.bus.is_connected:
+            raise RuntimeError("机械臂总线已经连接")
+        try:
+            self.bus.connect()
+            self._last_goal_velocity = None
+            self._last_goal_velocity_by_joint = {}
+            if not self.is_calibrated:
+                raise RuntimeError("LeRobot 五轴电机标定寄存器不一致")
+            present_raw = self.bus.sync_read(
+                "Present_Position", normalize=False, num_retry=2
+            )
+            self.bus.sync_write(
+                "Goal_Position", present_raw, normalize=False, num_retry=2
+            )
+            goal_raw = self.bus.sync_read("Goal_Position", normalize=False, num_retry=2)
+            mismatch = {
+                motor: int(goal_raw[motor]) - int(present_raw[motor])
+                for motor in JOINT_NAMES
+            }
+            if any(abs(delta) > 1 for delta in mismatch.values()):
+                raise RuntimeError(f"当前位置保持目标回读不一致: {mismatch}")
+            torque_raw = self.bus.sync_read(
+                "Torque_Enable", normalize=False, num_retry=2
+            )
+            torque_off = [motor for motor in JOINT_NAMES if int(torque_raw[motor]) == 0]
+            if torque_off:
+                raise RuntimeError(
+                    f"重连时五轴扭矩未全部开启（{torque_off}），拒绝继续"
+                )
+            present_deg = self.bus.sync_read(
+                "Present_Position", normalize=True, num_retry=2
+            )
+            return {f"{motor}.pos": float(present_deg[motor]) for motor in JOINT_NAMES}
+        except BaseException:
+            if self.bus.is_connected:
+                try:
+                    # 只断开串口；重连失败路径禁止再碰扭矩寄存器。
+                    self.bus.disconnect(disable_torque=False)
+                except BaseException:
+                    pass
+            raise
+
     def send_action(
-        self, action: RobotAction, *, goal_velocity: int | None = None
+        self,
+        action: RobotAction,
+        *,
+        goal_velocity: int | None = None,
+        goal_velocity_by_joint: Mapping[str, int] | None = None,
     ) -> RobotAction:
         """拒绝缺失、额外或六轴旧字段，再交由官方安全步长过滤发送。
 
-        goal_velocity: 可选，首次改变 profile 时写 Goal_Velocity 寄存器，
-        用舵机固件的速度模式（Goal_Velocity + Acceleration）生成梯形
-        速度曲线；同一 profile 的后续路点不重复写；None 保持当前值。
+        goal_velocity: 可选，所有关节的基础 Goal_Velocity。
+        goal_velocity_by_joint: 可选的逐关节覆盖；用于只提高低负载 wrist_roll
+        的速度，不能关闭位置反馈。速度配置变化时才重写 SRAM。
         """
         actual_keys = set(action)
         expected_keys = set(JOINT_FEATURES)
@@ -128,11 +190,17 @@ class SO101Follower5D(SOFollower):
             if isinstance(goal_velocity, bool) or not 0 <= int(goal_velocity) <= 32767:
                 raise ValueError("goal_velocity 必须是 0..32767 的整数")
             velocity = int(goal_velocity)
-            if velocity != self._last_goal_velocity:
-                self.bus.sync_write(
-                    "Goal_Velocity",
-                    {motor: velocity for motor in JOINT_NAMES},
-                    num_retry=2,
-                )
+            velocities = {motor: velocity for motor in JOINT_NAMES}
+            if goal_velocity_by_joint is not None:
+                unknown = set(goal_velocity_by_joint) - set(JOINT_NAMES)
+                if unknown:
+                    raise ValueError(f"速度覆盖包含未知关节: {sorted(unknown)}")
+                for motor, override in goal_velocity_by_joint.items():
+                    if isinstance(override, bool) or not 0 <= int(override) <= 32767:
+                        raise ValueError(f"{motor} 的速度覆盖必须是 0..32767 的整数")
+                    velocities[motor] = int(override)
+            if velocities != self._last_goal_velocity_by_joint:
+                self.bus.sync_write("Goal_Velocity", velocities, num_retry=2)
+                self._last_goal_velocity_by_joint = velocities
                 self._last_goal_velocity = velocity
         return super().send_action(action)

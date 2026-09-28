@@ -11,6 +11,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 DEPLOYMENT_ROOT = ROOT / "deployment/raspberry_pi"
@@ -18,6 +19,8 @@ OVERLAY = DEPLOYMENT_ROOT / "overlay"
 SYSTEMD = OVERLAY / "etc/systemd/system"
 UDEV_RULES = OVERLAY / "etc/udev/rules.d/70-epuzzle-devices.rules"
 SELFCHECK_PATH = OVERLAY / "usr/local/sbin/epuzzle-selfcheck"
+LOCK_CLEAR_HELPER = OVERLAY / "usr/local/sbin/epuzzle-clear-motion-lock"
+LOCK_CLEAR_SUDOERS = OVERLAY / "etc/sudoers.d/epuzzle-clear-motion-lock"
 START_SCRIPT = ROOT / "workspace/tools/start_pick_place_page.sh"
 
 
@@ -88,6 +91,25 @@ class DeploymentContractTests(unittest.TestCase):
         self.assertIn("pygame-ce wheel 未由 SHA256SUMS 覆盖", build_script)
         self.assertNotIn("缺少 canonical Supervisor entrypoint", build_script)
 
+    def test_motion_lock_clear_helper_has_fixed_confirmation_boundary(self) -> None:
+        helper = LOCK_CLEAR_HELPER.read_text(encoding="utf-8")
+        sudoers = LOCK_CLEAR_SUDOERS.read_text(encoding="utf-8")
+        build_script = (DEPLOYMENT_ROOT / "build-image.sh").read_text(encoding="utf-8")
+        confirmation = "/opt/epuzzle/workspace/runtime/gui/motion_lock_confirmation.json"
+        self.assertIn(confirmation, helper)
+        self.assertIn("OPERATOR_CONFIRMATION", helper)
+        self.assertIn("LOCK_PATH.unlink()", helper)
+        self.assertIn(confirmation, sudoers)
+        self.assertIn("NOPASSWD", sudoers)
+        self.assertIn("chmod 0440", build_script)
+        self.assertIn("epuzzle-clear-motion-lock", build_script)
+
+    def test_image_build_forces_mpi700_native_video_mode(self) -> None:
+        build_script = (ROOT / "deployment/raspberry_pi/build-image.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("video=HDMI-A-2:1024x600@60", build_script)
+
     def test_environment_enables_only_confirmed_magnet_control_chain(self) -> None:
         environment = (OVERLAY / "etc/epuzzle/epuzzle.env").read_text(encoding="utf-8")
         registry = (ROOT / "configs/parameter_registry.yaml").read_text(
@@ -110,7 +132,7 @@ class DeploymentContractTests(unittest.TestCase):
         self.assertEqual(selfcheck.EXPECTED_GUI_PACKAGES["pygame"], "2.6.1")
         self.assertIn("pygame", selfcheck.EXPECTED_IMPORTS)
         self.assertIn(
-            "workspace/calibration/table_homography_gui_20260731.npy",
+            "workspace/calibration/table_homography_charuco_recalibrated_20260801.npy",
             selfcheck.FROZEN_CALIBRATION_FILES,
         )
         self.assertIn(
@@ -155,6 +177,43 @@ class DeploymentContractTests(unittest.TestCase):
         self.assertFalse(deferred["passed"])
         self.assertEqual(deferred["severity"], "warning")
         self.assertIn("remain gated", deferred["detail"])
+
+    def test_selfcheck_usb_fault_counts_distinguish_port_and_controller(self) -> None:
+        selfcheck = load_selfcheck_module()
+        sample_logs = (
+            "usb usb3-port2: disabled by hub (EMI?), re-enabling...\n"
+            "usb 3-2: USB disconnect, device number 6\n"
+            "usb 3-1: USB disconnect, device number 11\n"
+            "xhci-hcd xhci-hcd.1: xHCI host not responding to stop endpoint command\n"
+            "xhci-hcd xhci-hcd.1: xHCI host controller not responding, assume dead\n"
+            "xhci-hcd xhci-hcd.1: HC died; cleaning up\n"
+        )
+        with mock.patch.object(selfcheck, "command_output", return_value=sample_logs):
+            check = selfcheck.usb_fault_check()
+        self.assertEqual(check["name"], "usb_port_faults")
+        self.assertFalse(check["passed"])
+        self.assertEqual(check["severity"], "error")
+        self.assertIn("port_emi=1", check["detail"])
+        self.assertIn("port_disconnect=2", check["detail"])
+        self.assertIn("controller_death=3", check["detail"])
+
+    def test_selfcheck_usb_port_events_are_warning_not_blocking(self) -> None:
+        selfcheck = load_selfcheck_module()
+        sample_logs = (
+            "usb usb3-port2: disabled by hub (EMI?), re-enabling...\n"
+            "usb 3-2: USB disconnect, device number 6\n"
+        )
+        with mock.patch.object(selfcheck, "command_output", return_value=sample_logs):
+            check = selfcheck.usb_fault_check()
+        self.assertFalse(check["passed"])
+        self.assertEqual(check["severity"], "warning")
+
+    def test_selfcheck_usb_clean_boot_is_info(self) -> None:
+        selfcheck = load_selfcheck_module()
+        with mock.patch.object(selfcheck, "command_output", return_value=""):
+            check = selfcheck.usb_fault_check()
+        self.assertTrue(check["passed"])
+        self.assertEqual(check["severity"], "info")
 
     def test_selfcheck_motion_lock_blocks_full_hardware_readiness(self) -> None:
         selfcheck = load_selfcheck_module()

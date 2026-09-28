@@ -81,21 +81,29 @@ def pick_place_motion_config() -> MotionConfig:
         max_cartesian_step_mm=15.0,
         max_orientation_step_deg=10.0,
         max_joint_step_deg=10.0,
-        joint_tolerance_deg=3.0,
+        # 2026-08-01 诊断试验：持物抬升末点先放宽到 5°，确认失败是否仅由
+        # 3° 收敛门槛触发；这不是最终安全标定。
+        joint_tolerance_deg=5.0,
         stable_samples=1,
         poll_interval_s=0.05,
-        waypoint_timeout_s=8.0,
+        # wrist_roll 无承重但机械速度较慢；保留有限 30s 收敛窗口，禁止无限等待。
+        waypoint_timeout_s=30.0,
         safe_min_z_mm=-20.0,
         contact_min_z_mm=-30.0,
         max_z_mm=180.0,
-        transit_cartesian_step_mm=25.0,
         follow_tolerance_deg=8.0,
-        # 第一阶段仅提速空载/接近；持物速度保持保守档。
+        # 本次速度试验：在上一版档位上继续有限提速；仍保留位置反馈、
+        # 路点 dwell 和最终容差，不改安全边界。
         goal_velocity_by_profile={
-            "EMPTY_NORMAL": 250,
-            "EMPTY_SLOW": 150,
-            "HOLDING_SLOW": 100,
+            "EMPTY_NORMAL": 300,
+            "EMPTY_SLOW": 200,
+            "HOLDING_SLOW": 125,
         },
+        # wrist_roll 继续使用低负载关节专用速度覆盖。
+        goal_velocity_overrides_by_profile={
+            "HOLDING_SLOW": {"wrist_roll": 250},
+        },
+        # 防止 follow_tolerance 在首个读回时把未移动的路点误判为完成。
         waypoint_min_dwell_s_by_profile={
             "EMPTY_NORMAL": 0.15,
             "EMPTY_SLOW": 0.20,
@@ -123,7 +131,8 @@ def make_config(
         park_tolerance_deg=4,
         park_follow_tolerance_deg=8,
         max_vision_age_ms=3_600_000,  # 计划预计算后四片连续执行，单次 grasp_fsm ~20s，放宽到 1h
-        global_timeout_s=180,
+        # 放宽总流程上限以容纳慢速舵机，但仍保留有限事故边界。
+        global_timeout_s=300,
         shadow=shadow,
         automatic_pick_place_enabled=heights is not None,
         precision_radial_compensation_mm=3,
@@ -132,6 +141,7 @@ def make_config(
         magnet_footprint_clearance_frozen=heights is not None,
         magnet_on_settle_s=None if heights is None else heights.magnet_on_settle_s,
         magnet_off_settle_s=None if heights is None else heights.magnet_off_settle_s,
+        vertical_approach_mm=30.0,
     )
 
 
@@ -145,6 +155,36 @@ class _PlanVision:
         return self._batch
 
 
+def _polling_drive_to_joints(adapter, target_deg: dict[str, float], *, step: float = 3.0, tol: float = 2.5, timeout_s: float = 120.0) -> None:
+    """轮询式关节驱动：每步发送后等待读回进入容差再走下一步。
+
+    用于断力矩漂移后的归位（PARK 折叠位 lift 会下垂 ~12°，park_sequence
+    的 60ms 跟随窗口会被舵机低速击穿）。
+    """
+    import time
+
+    features = ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.pos", "wrist_roll.pos"]
+
+    def joints() -> dict[str, float]:
+        obs = adapter.robot.get_observation()
+        return {k: float(v) for k, v in obs.items() if k.endswith(".pos")}
+
+    cur = joints()
+    started = time.monotonic()
+    while True:
+        cur = joints()
+        errors = {f: target_deg[f.removesuffix(".pos")] - cur[f] for f in features}
+        if all(abs(value) <= tol for value in errors.values()):
+            return
+        if time.monotonic() - started > timeout_s:
+            raise RuntimeError(f"轮询归位超时，剩余误差 {max(abs(v) for v in errors.values()):.2f}°")
+        action = dict(cur)
+        for feature in features:
+            action[feature] = cur[feature] + max(-step, min(step, errors[feature]))
+        adapter.robot.send_action(action, goal_velocity=120)
+        time.sleep(0.12)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="四片连续拼装（带 yaw 补偿）")
     parser.add_argument("--plan", type=Path, required=True)
@@ -155,7 +195,14 @@ def main() -> None:
         default=Path("/home/epuzzle/.cache/huggingface/lerobot/calibration/robots/so101_follower_5d"),
     )
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--state-path",
+        type=Path,
+        default=Path.home() / "assembly_state.json",
+        help="当前计划的完成状态；新 GUI 任务传入专属 runtime 文件",
+    )
     args = parser.parse_args()
+    state_path = args.state_path
 
     heights = load_pick_place_heights()
     lock_reason = robot_motion_lock_reason(ROBOT_MOTION_LOCK_PATH)
@@ -229,15 +276,19 @@ def main() -> None:
         src_yaw_table: float,
         tgt_yaw_table: float,
     ) -> tuple[float, float]:
-        """计算 PICK/PLACE 的 robot 系 yaw，保证碎片旋转 ≡ Δyaw (mod 360)。
+        """计算 PICK/PLACE 的 robot 系 yaw，保证实际碎片旋转 ≡ −Δyaw (mod 360)。
 
         0° 基准约定：src_yaw_table 恒为 0（不测量碎片绝对朝向），
-        tgt_yaw_table 即求解器相对旋转角。
+        tgt_yaw_table 即求解器相对旋转角（逆时针为正）。
+
+        实测方向修正（2026-08-01）：wrist_roll 硬件旋转方向与 FK 假设相反
+        （roll 物理角增大=俯视顺时针，pan 物理角增大=俯视逆时针），因此
+        实际碎片旋转（俯视顺时针为正）= Δroll_phys − Δpan_phys，而 IK 只
+        保证 Δpan + Δroll = 命令 Δyaw，命令增量需取 2*Δpan − Δyaw。
 
         物理约束：wrist_roll 单圈（STS3215 0..4095 ticks），逻辑限位 [-180,180]
         → 物理限位 [logical*direction+offset] = [-262.15, +97.85]（direction=-1,
-        offset=-82.15）。碎片旋转 = 末端 yaw 变化 = Δpan + Δroll_physical，
-        必须等于求解器 Δyaw（模 360）。Δyaw 等价角 {Δyaw, Δyaw±360} 中选
+        offset=-82.15）。Δyaw_cmd 等价角 {Δyaw_cmd, Δyaw_cmd±360} 中选
         使物理 roll 落入限位的那个。
         """
         geom = adapter.kinematics.geometry
@@ -273,15 +324,26 @@ def main() -> None:
         pan_pick_phys = pan_pick_log * geom.joint_directions[0] + geom.joint_zero_offsets_deg[0]
         roll_pick_phys = roll_pick_log * roll_dir + roll_off
 
-        # PLACE pan（位置决定，与 yaw 无关）
+        # PLACE pan（位置决定，与 yaw 无关）：必须用 IK 精确解。
+        # atan2(y,x) 近似会丢 shoulder_lateral_offset 的 atan2(lateral,radial)
+        # 修正项，实测 piece_01 目标位偏差 6.4°（2026-08-01）。
         place_base = adapter.pose_for(tgt_ref, 60.0)
-        pan_place_phys = float(
-            np.degrees(
-                np.arctan2(place_base.position_mm[1], place_base.position_mm[0])
-            )
+        place_jv0 = adapter.kinematics.inverse(place_base)
+        pan_place_phys = (
+            place_jv0.as_mapping()["shoulder_pan.pos"]
+            * geom.joint_directions[0]
+            + geom.joint_zero_offsets_deg[0]
         )
         delta_yaw = (tgt_yaw_table - src_yaw_table + 180.0) % 360.0 - 180.0
-        candidates = [delta_yaw, delta_yaw + 360.0, delta_yaw - 360.0]
+        # 2026-08-01 实机方向修正：wrist_roll 硬件旋转方向与 FK 假设相反。
+        # 实测（俯视）：roll 物理角增大 = 顺时针；pan 物理角增大 = 逆时针。
+        # 因此实际碎片旋转（俯视顺时针为正）= Δroll_phys − Δpan_phys，
+        # 而 IK 只保证 Δpan + Δroll = 命令 Δyaw。代入得实际 = Δyaw_cmd − 2Δpan。
+        # 求解器 Δyaw 以逆时针为正，要求实际 = −Δyaw，故命令增量取
+        #   Δyaw_cmd = 2*Δpan − Δyaw
+        pan_delta_phys = pan_place_phys - pan_pick_phys
+        delta_yaw_cmd = 2.0 * pan_delta_phys - delta_yaw
+        candidates = [delta_yaw_cmd, delta_yaw_cmd + 360.0, delta_yaw_cmd - 360.0]
         chosen: float | None = None
         chosen_roll: float = 0.0
         for cand in candidates:
@@ -290,7 +352,7 @@ def main() -> None:
                 chosen = cand
                 chosen_roll = roll_place_phys
                 print(
-                    f"    补偿: Δyaw={delta_yaw:.1f}° 取等价角 {cand:+.1f}° | "
+                    f"    补偿: Δyaw={delta_yaw:.1f}° 修正命令角 {cand:+.1f}° | "
                     f"pan_phys {pan_pick_phys:+.1f}→{pan_place_phys:+.1f} | "
                     f"roll_phys {roll_pick_phys:+.1f}→{roll_place_phys:+.1f} ✓"
                 )
@@ -372,7 +434,16 @@ def main() -> None:
         batch = active.scan()
         print(f"视觉批次: {batch.batch_id} ({len(batch.pieces)} 片)\n")
 
-        # PARK → HOME
+        # PARK → HOME（先处理断力矩漂移：调试脚本退出会断力矩，PARK 折叠位
+        # lift 下垂 ~12°，is_at_park 前置检查会失败；先轮询拉回正式 PARK）
+        if adapter.park_mover is not None and not adapter.park_mover.is_at_park():
+            print("不在正式 PARK（可能断力矩漂移），轮询归位...")
+            _polling_drive_to_joints(adapter, adapter._park_deg)
+            if not adapter.park_mover.is_at_park():
+                raise SupervisorFailure(
+                    SupervisorErrorCode.PARK_TRANSITION_FAILED,
+                    "轮询归位后仍未进入正式 PARK 容差",
+                )
         print("PARK → HOME...")
         res = adapter.park_mover.park_to_home()
         if not res.success:
@@ -384,7 +455,6 @@ def main() -> None:
             print(f"\n=== 片 {idx}/4: {p['piece_id']} ===")
             # 完成状态持久化：重跑时跳过已完成片，避免 USB 掉线崩溃后
             # 重复抓放已放置的碎片（实机踩坑：piece_01 被二次抓取放错）。
-            state_path = Path("/home/epuzzle/assembly_state.json")
             done = set()
             if state_path.exists():
                 try:
@@ -409,18 +479,32 @@ def main() -> None:
             place_pose = ToolPose(
                 place_pose.frame, place_pose.position_mm, place_pose.pitch_deg, place_yaw_robot
             )
-            # 验证实际碎片旋转 = Δyaw（模 360）
+            # 验证实际碎片旋转 = −Δyaw（模 360）
+            # 实测方向：roll 物理角增大=顺时针，pan 物理角增大=逆时针，
+            # 实际碎片旋转（俯视顺正）= Δroll_phys − Δpan_phys。
+            # 必须用物理角：逻辑角差会被 direction=-1 翻转，产生 ±360 伪差
+            # （实测 piece_01 逻辑差 +183.2 实为物理 −183.2 ≡ +176.8 ✓）。
             pick_jv = adapter.kinematics.inverse(pick_pose)
             place_jv = adapter.kinematics.inverse(place_pose)
             pm = pick_jv.as_mapping()
             lm = place_jv.as_mapping()
-            actual_rot = (lm["shoulder_pan.pos"] + lm["wrist_roll.pos"]) - (
-                pm["shoulder_pan.pos"] + pm["wrist_roll.pos"]
-            )
+            geom = adapter.kinematics.geometry
+
+            def phys(logical: float, idx: int) -> float:
+                return (
+                    logical * geom.joint_directions[idx]
+                    + geom.joint_zero_offsets_deg[idx]
+                )
+
+            pan_p = phys(pm["shoulder_pan.pos"], 0)
+            roll_p = phys(pm["wrist_roll.pos"], 4)
+            pan_l = phys(lm["shoulder_pan.pos"], 0)
+            roll_l = phys(lm["wrist_roll.pos"], 4)
+            actual_rot = (roll_l - roll_p) - (pan_l - pan_p)
             delta_yaw = (p["tgt_yaw"] - p["src_yaw"] + 180.0) % 360.0 - 180.0
-            ok = abs((actual_rot - delta_yaw + 180.0) % 360.0 - 180.0) < 0.5
+            ok = abs((actual_rot + delta_yaw + 180.0) % 360.0 - 180.0) < 0.5
             print(
-                f"  旋转验证: 实际 {actual_rot:+.1f}° vs Δyaw {delta_yaw:+.1f}° "
+                f"  旋转验证: 实际碎片旋转 {actual_rot:+.1f}° vs 目标 −Δyaw {(-delta_yaw):+.1f}° "
                 f"({'✓' if ok else '✗ 偏差!'})"
             )
             plan_ref = PlacementPlanRef(batch.source_image_sha256, batch.monotonic_ns)
